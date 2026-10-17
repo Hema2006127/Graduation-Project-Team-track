@@ -182,12 +182,16 @@ export interface SeedTask {
   title: string;
   description: string | null;
   specialization_id: string;
+  session_id: string | null;
   week_number: number;
   assigned_member_id: string | null;
   is_completed: boolean;
   priority: 'low' | 'medium' | 'high';
   due_date: string | null;
 }
+
+const sess = (titleKeyword: string) =>
+  SEED_SESSIONS.find((s) => s.title.toLowerCase().includes(titleKeyword.toLowerCase()))?.id ?? SEED_SESSIONS[0].id;
 
 export const SEED_TASKS: SeedTask[] = [
   // Frontend
@@ -196,6 +200,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Initialize repository, setup Vite, Tailwind CSS & routing',
     description: 'Set up Vite with React 19, Tailwind CSS v4, and react-router v8.',
     specialization_id: spec('Frontend'),
+    session_id: sess('Weekly Team Meeting'),
     week_number: 1,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Nour El-Din')?.id ?? null,
     is_completed: true,
@@ -207,6 +212,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Implement responsive team dashboard and analytics charts',
     description: 'Build stat cards, attendance donut chart, and member performance list.',
     specialization_id: spec('Frontend'),
+    session_id: sess('Sprint Planning'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Salma Tarek')?.id ?? null,
     is_completed: true,
@@ -218,6 +224,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Build Weekly Track Tasks & To-Do management interface',
     description: 'Allow members to select track, filter by week, add tasks, and check completion.',
     specialization_id: spec('Frontend'),
+    session_id: sess('UI/UX Design Review'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Nour El-Din')?.id ?? null,
     is_completed: true,
@@ -229,6 +236,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Add Excel & PDF report generation for weekly progress',
     description: 'Export attendance and task delivery summaries per track.',
     specialization_id: spec('Frontend'),
+    session_id: sess('Sprint Planning'),
     week_number: 4,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Salma Tarek')?.id ?? null,
     is_completed: false,
@@ -242,6 +250,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Design database schema, tables & entity relationships',
     description: 'Create PostgreSQL tables for members, specializations, sessions, and tasks.',
     specialization_id: spec('Backend'),
+    session_id: sess('Database Design Session'),
     week_number: 1,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Mohamed Hassan')?.id ?? null,
     is_completed: true,
@@ -253,6 +262,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Implement authentication & role-based access control (RBAC)',
     description: 'Secure API endpoints for admin and doctor roles.',
     specialization_id: spec('Backend'),
+    session_id: sess('Backend Architecture Review'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Karim Samir')?.id ?? null,
     is_completed: true,
@@ -264,6 +274,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Develop REST endpoints for track tasks & weekly progress',
     description: 'CRUD endpoints with filtering by specialization and week number.',
     specialization_id: spec('Backend'),
+    session_id: sess('Backend Architecture Review'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Mohamed Hassan')?.id ?? null,
     is_completed: true,
@@ -275,6 +286,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Configure automated database backup and health monitoring',
     description: 'Setup cron backups and query performance logs.',
     specialization_id: spec('Backend'),
+    session_id: sess('Backend Architecture Review'),
     week_number: 4,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Karim Samir')?.id ?? null,
     is_completed: false,
@@ -288,6 +300,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Setup Flutter project structure with Clean Architecture',
     description: 'Organize presentation, domain, and data layers with BLoC state management.',
     specialization_id: spec('Flutter'),
+    session_id: sess('Weekly Team Meeting'),
     week_number: 1,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Hema Mohamed')?.id ?? null,
     is_completed: true,
@@ -299,6 +312,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Build QR code scanner screen for session attendance',
     description: 'Integrate camera package and scanner overlay animation.',
     specialization_id: spec('Flutter'),
+    session_id: sess('Flutter App Demo'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Hema Mohamed')?.id ?? null,
     is_completed: true,
@@ -310,6 +324,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Connect Mobile app to REST API with offline caching',
     description: 'Cache weekly tasks and attendance records locally using Hive.',
     specialization_id: spec('Flutter'),
+    session_id: sess('Flutter App Demo'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Hema Mohamed')?.id ?? null,
     is_completed: false,
@@ -323,6 +338,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Dataset collection and data exploratory analysis (EDA)',
     description: 'Collect raw dataset, handle missing values, and normalize features.',
     specialization_id: spec('AI / Machine Learning'),
+    session_id: sess('AI Model Meeting'),
     week_number: 1,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Ahmed Mohamed')?.id ?? null,
     is_completed: true,
@@ -334,6 +350,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Train baseline machine learning model and measure metrics',
     description: 'Evaluate Accuracy, Precision, Recall, and Confusion Matrix.',
     specialization_id: spec('AI / Machine Learning'),
+    session_id: sess('AI Model Meeting'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Laila Mostafa')?.id ?? null,
     is_completed: true,
@@ -345,6 +362,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Hyperparameter tuning & deep learning model training',
     description: 'Grid search for optimal learning rate, batch size, and dropout.',
     specialization_id: spec('AI / Machine Learning'),
+    session_id: sess('AI Model Meeting'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Ahmed Mohamed')?.id ?? null,
     is_completed: false,
@@ -358,6 +376,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'User research, interviews & persona development',
     description: 'Map user journeys for doctors, admins, and students.',
     specialization_id: spec('UI/UX'),
+    session_id: sess('UI/UX Design Review'),
     week_number: 1,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Sara Ali')?.id ?? null,
     is_completed: true,
@@ -369,6 +388,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Design Figma UI component library and wireframes',
     description: 'Consistent color tokens, typography scales, buttons, and cards.',
     specialization_id: spec('UI/UX'),
+    session_id: sess('UI/UX Design Review'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Sara Ali')?.id ?? null,
     is_completed: true,
@@ -380,6 +400,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Create interactive prototype for weekly tasks flow',
     description: 'Test task addition and status toggling micro-interactions.',
     specialization_id: spec('UI/UX'),
+    session_id: sess('UI/UX Design Review'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Sara Ali')?.id ?? null,
     is_completed: true,
@@ -393,6 +414,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Security threat modeling & vulnerability analysis',
     description: 'Perform static code analysis and review API auth mechanisms.',
     specialization_id: spec('Cyber Security'),
+    session_id: sess('Security Audit Review'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Omar Farouk')?.id ?? null,
     is_completed: true,
@@ -404,6 +426,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Audit SQL injection risks and enforce RLS policies',
     description: 'Verify row-level security policies across all tables.',
     specialization_id: spec('Cyber Security'),
+    session_id: sess('Security Audit Review'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Omar Farouk')?.id ?? null,
     is_completed: false,
@@ -417,6 +440,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Draft Chapter 1 & Chapter 2 of graduation documentation',
     description: 'Introduction, problem statement, and literature review.',
     specialization_id: spec('Documentation'),
+    session_id: sess('Documentation Sync'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Yasmin Adel')?.id ?? null,
     is_completed: true,
@@ -428,6 +452,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Document system architecture and database schema specifications',
     description: 'Class diagrams, sequence diagrams, and schema documentation.',
     specialization_id: spec('Documentation'),
+    session_id: sess('Documentation Sync'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Yasmin Adel')?.id ?? null,
     is_completed: false,
@@ -441,6 +466,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Setup Vitest suite and write unit tests for business logic',
     description: 'Test attendance calculations, rates, and date helpers.',
     specialization_id: spec('Testing'),
+    session_id: sess('Testing Strategy'),
     week_number: 2,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Youssef Ibrahim')?.id ?? null,
     is_completed: true,
@@ -452,6 +478,7 @@ export const SEED_TASKS: SeedTask[] = [
     title: 'Write end-to-end test scenarios for Weekly Task workflows',
     description: 'Validate task creation, track selection, and completion toggling.',
     specialization_id: spec('Testing'),
+    session_id: sess('Testing Strategy'),
     week_number: 3,
     assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Youssef Ibrahim')?.id ?? null,
     is_completed: false,
@@ -459,4 +486,5 @@ export const SEED_TASKS: SeedTask[] = [
     due_date: '2026-10-18',
   },
 ];
+
 

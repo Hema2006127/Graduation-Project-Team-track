@@ -205,6 +205,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
       try {
         let q = sb.from('track_tasks').select('*').order('week_number').order('created_at', { ascending: false });
         if (filter.specializationId) q = q.eq('specialization_id', filter.specializationId);
+        if (filter.sessionId) q = q.eq('session_id', filter.sessionId);
         if (filter.weekNumber) q = q.eq('week_number', filter.weekNumber);
         const { data, error } = await q;
         if (error) throw error;
@@ -214,6 +215,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
         const raw = localStorage.getItem('ta.tasks.fallback');
         let list: TrackTask[] = raw ? JSON.parse(raw) : [];
         if (filter.specializationId) list = list.filter((t) => t.specialization_id === filter.specializationId);
+        if (filter.sessionId) list = list.filter((t) => t.session_id === filter.sessionId);
         if (filter.weekNumber) list = list.filter((t) => t.week_number === filter.weekNumber);
         return list;
       }
@@ -232,7 +234,9 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
           title: input.title,
           description: input.description ?? null,
           specialization_id: input.specialization_id,
-          week_number: input.week_number,
+          session_id: input.session_id ?? null,
+          session_title: input.session_title ?? null,
+          week_number: input.week_number ?? 1,
           assigned_member_id: input.assigned_member_id ?? null,
           assigned_member_name: input.assigned_member_name ?? null,
           is_completed: Boolean(input.is_completed),
@@ -247,6 +251,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
         return newTask;
       }
     },
+
     async updateTask(id, input) {
       const now = new Date().toISOString();
       try {

@@ -81,6 +81,8 @@ export interface TrackTask {
   title: string;
   description: string | null;
   specialization_id: string;
+  session_id?: string | null;
+  session_title?: string | null;
   week_number: number;
   assigned_member_id: string | null;
   assigned_member_name?: string | null;
@@ -113,11 +115,14 @@ export interface TrackTaskInput {
   title: string;
   description?: string | null;
   specialization_id: string;
-  week_number: number;
+  session_id?: string | null;
+  session_title?: string | null;
+  week_number?: number;
   assigned_member_id?: string | null;
   assigned_member_name?: string | null;
   is_completed?: boolean;
   priority?: TaskPriority;
   due_date?: string | null;
 }
+
 

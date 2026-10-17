@@ -74,7 +74,9 @@ export const trackTaskSchema = z.object({
   title: z.string().trim().min(2, 'Task title must be at least 2 characters').max(200),
   description: optionalText(1000),
   specialization_id: z.string().min(1, 'Please select a track'),
-  week_number: z.coerce.number().int().min(1, 'Week must be at least 1').max(52, 'Week must be at most 52'),
+  session_id: optionalText(100),
+  session_title: optionalText(200),
+  week_number: z.coerce.number().int().min(1, 'Week must be at least 1').max(52, 'Week must be at most 52').default(1),
   assigned_member_id: optionalText(100),
   assigned_member_name: optionalText(100),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
@@ -85,6 +87,7 @@ export const trackTaskSchema = z.object({
     .nullable()
     .refine((v) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Enter a valid date (YYYY-MM-DD)'),
 });
+
 
 export type FieldErrors = Record<string, string>;
 

@@ -67,10 +67,11 @@ export interface Api {
   saveAttendance(sessionId: string, entries: AttendanceEntry[]): Promise<AttendanceRecord[]>;
 
   // tasks
-  listTasks(filter?: { specializationId?: string; weekNumber?: number }): Promise<TrackTask[]>;
+  listTasks(filter?: { specializationId?: string; sessionId?: string; weekNumber?: number }): Promise<TrackTask[]>;
   createTask(input: TrackTaskInput): Promise<TrackTask>;
   updateTask(id: string, input: Partial<TrackTaskInput>): Promise<TrackTask>;
   toggleTaskCompleted(id: string, is_completed: boolean): Promise<TrackTask>;
   deleteTask(id: string): Promise<void>;
 }
+
 

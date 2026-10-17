@@ -136,24 +136,32 @@ describe('demo API mirrors database rules', () => {
     const initialTasks = await api.listTasks();
     expect(initialTasks.length).toBeGreaterThan(0);
 
-    const [specs] = await Promise.all([api.listSpecializations(), api.listMembers()]);
+    const [specs, sessions] = await Promise.all([api.listSpecializations(), api.listSessions()]);
     const frontend = specs.find((s) => s.name === 'Frontend')!;
+    const targetSession = sessions[0];
 
     // 2. Filter by track
     const frontendTasks = await api.listTasks({ specializationId: frontend.id });
     expect(frontendTasks.every((t) => t.specialization_id === frontend.id)).toBe(true);
 
-    // 3. Create a new weekly task
+    // Filter by session
+    const sessionTasks = await api.listTasks({ sessionId: targetSession.id });
+    expect(sessionTasks.every((t) => t.session_id === targetSession.id)).toBe(true);
+
+    // 3. Create a new weekly task linked to a session
     const created = await api.createTask({
       title: 'Implement Dark Mode for Mobile',
       description: 'Support OLED dark theme and system preference',
       specialization_id: frontend.id,
+      session_id: targetSession.id,
       week_number: 4,
       priority: 'high',
       due_date: '2026-10-25',
     });
     expect(created.id).toBeDefined();
     expect(created.title).toBe('Implement Dark Mode for Mobile');
+    expect(created.session_id).toBe(targetSession.id);
+    expect(created.session_title).toBe(targetSession.title);
     expect(created.is_completed).toBe(false);
     expect(created.completed_at).toBeNull();
 

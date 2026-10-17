@@ -8,7 +8,8 @@ create table if not exists public.track_tasks (
   title text not null check (char_length(trim(title)) between 2 and 200),
   description text,
   specialization_id uuid not null references public.specializations(id) on delete cascade,
-  week_number integer not null check (week_number between 1 and 52),
+  session_id uuid references public.sessions(id) on delete cascade,
+  week_number integer not null default 1 check (week_number between 1 and 52),
   assigned_member_id uuid references public.team_members(id) on delete set null,
   assigned_member_name text,
   is_completed boolean not null default false,
@@ -21,8 +22,10 @@ create table if not exists public.track_tasks (
 
 -- Indexes for fast query and filtering
 create index if not exists idx_track_tasks_specialization on public.track_tasks (specialization_id);
+create index if not exists idx_track_tasks_session on public.track_tasks (session_id);
 create index if not exists idx_track_tasks_week on public.track_tasks (week_number);
 create index if not exists idx_track_tasks_completed on public.track_tasks (is_completed);
+
 
 -- Enable RLS
 alter table public.track_tasks enable row level security;

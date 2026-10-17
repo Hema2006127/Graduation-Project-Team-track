@@ -24,11 +24,12 @@ export const useProfiles = () => useQuery({ queryKey: qk.profiles, queryFn: api.
 export const useSessions = () => useQuery({ queryKey: qk.sessions, queryFn: api.listSessions });
 /** All attendance the current user may see (RLS limits members to their own). */
 export const useAttendance = () => useQuery({ queryKey: qk.attendance, queryFn: () => api.listAttendance() });
-export const useTasks = (filter?: { specializationId?: string; weekNumber?: number }) =>
+export const useTasks = (filter?: { specializationId?: string; sessionId?: string; weekNumber?: number }) =>
   useQuery({
-    queryKey: [...qk.tasks, filter?.specializationId ?? 'all', filter?.weekNumber ?? 'all'],
+    queryKey: [...qk.tasks, filter?.specializationId ?? 'all', filter?.sessionId ?? 'all', filter?.weekNumber ?? 'all'],
     queryFn: () => api.listTasks(filter),
   });
+
 
 
 /** Wall-clock "now" in the team timezone, refreshed every 30 s so phases update live. */

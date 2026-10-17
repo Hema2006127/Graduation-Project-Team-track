@@ -66,11 +66,14 @@ export function buildSeedDb(): DemoDb {
 
   db.tasks = SEED_TASKS.map((t) => {
     const member = db.members.find((m) => m.id === t.assigned_member_id);
+    const session = t.session_id ? db.sessions.find((s) => s.id === t.session_id) : null;
     return {
       id: t.id,
       title: t.title,
       description: t.description,
       specialization_id: t.specialization_id,
+      session_id: t.session_id ?? null,
+      session_title: session?.title ?? null,
       week_number: t.week_number,
       assigned_member_id: t.assigned_member_id,
       assigned_member_name: member?.full_name ?? null,
@@ -82,6 +85,7 @@ export function buildSeedDb(): DemoDb {
       updated_at: created,
     };
   });
+
 
   // Roster = members active at the time of each session (mirrors seed.sql).
   const marks = new Map(SEED_ATTENDANCE.map((a) => [`${a.session_id}|${a.team_member_id}`, a]));
@@ -421,10 +425,19 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         if (filter?.specializationId) {
           list = list.filter((t) => t.specialization_id === filter.specializationId);
         }
+        if (filter?.sessionId) {
+          list = list.filter((t) => t.session_id === filter.sessionId);
+        }
         if (filter?.weekNumber) {
           list = list.filter((t) => t.week_number === filter.weekNumber);
         }
-        return list.sort((a, b) => {
+        return list.map((t) => {
+          if (t.session_id && !t.session_title) {
+            const s = db.sessions.find((sess) => sess.id === t.session_id);
+            return { ...t, session_title: s?.title ?? null };
+          }
+          return t;
+        }).sort((a, b) => {
           if (a.week_number !== b.week_number) return a.week_number - b.week_number;
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
@@ -434,11 +447,14 @@ export function createDemoApi(storage: Storage = localStorage): Api {
       tx(() => {
         const t = now();
         const member = input.assigned_member_id ? db.members.find((m) => m.id === input.assigned_member_id) : null;
+        const session = input.session_id ? db.sessions.find((s) => s.id === input.session_id) : null;
         const task: TrackTask = {
           id: uid(),
           title: input.title.trim(),
           description: input.description?.trim() || null,
           specialization_id: input.specialization_id,
+          session_id: input.session_id || null,
+          session_title: session?.title ?? input.session_title ?? null,
           week_number: Number(input.week_number) || 1,
           assigned_member_id: input.assigned_member_id || null,
           assigned_member_name: member?.full_name ?? input.assigned_member_name ?? null,
@@ -467,6 +483,11 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         if (input.title !== undefined) task.title = input.title.trim();
         if (input.description !== undefined) task.description = input.description?.trim() || null;
         if (input.specialization_id !== undefined) task.specialization_id = input.specialization_id;
+        if (input.session_id !== undefined) {
+          task.session_id = input.session_id || null;
+          const session = input.session_id ? db.sessions.find((s) => s.id === input.session_id) : null;
+          task.session_title = session?.title ?? input.session_title ?? null;
+        }
         if (input.week_number !== undefined) task.week_number = Number(input.week_number) || 1;
         if (input.assigned_member_id !== undefined) {
           task.assigned_member_id = input.assigned_member_id || null;
@@ -481,6 +502,7 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         task.updated_at = t;
         return task;
       }),
+
 
     toggleTaskCompleted: (id, is_completed) =>
       tx(() => {
