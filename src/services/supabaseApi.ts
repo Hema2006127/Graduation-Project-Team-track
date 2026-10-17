@@ -20,9 +20,27 @@ const authStorage = {
   },
 };
 
+const LOCAL_MEMBER_SPECS_KEY = 'ta.member_specs';
+function getLocalMemberSpecs(): Record<string, string[]> {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_MEMBER_SPECS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+function setLocalMemberSpecs(memberId: string, specIds: string[]) {
+  try {
+    const current = getLocalMemberSpecs();
+    current[memberId] = specIds;
+    localStorage.setItem(LOCAL_MEMBER_SPECS_KEY, JSON.stringify(current));
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Columns anonymous visitors may read (see migration 20260927000003_public_read.sql). */
 const PUBLIC_COLUMNS = {
-  team_members: 'id,member_code,full_name,avatar_url,specialization_id,specialization_ids,status,created_at,updated_at',
+  team_members: 'id,member_code,full_name,avatar_url,specialization_id,status,created_at,updated_at',
   attendance: 'id,session_id,team_member_id,status,recorded_at,created_at,updated_at',
   profiles: 'id,full_name,role',
 };
@@ -141,10 +159,81 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
     async listMembers() {
       const cols = await columns('team_members');
       const rows = await all<TeamMember>((f, t) => sb.from('team_members').select(cols).order('member_code').range(f, t));
-      return rows.map((m) => ({ ...m, email: m.email ?? '', phone: m.phone ?? null }));
+      const localSpecs = getLocalMemberSpecs();
+      return rows.map((m) => {
+        const specs = m.specialization_ids && m.specialization_ids.length > 0
+          ? m.specialization_ids
+          : (localSpecs[m.id] ?? (m.specialization_id ? [m.specialization_id] : []));
+        return {
+          ...m,
+          email: m.email ?? '',
+          phone: m.phone ?? null,
+          specialization_ids: specs,
+        };
+      });
     },
-    createMember: (input) => one(sb.from('team_members').insert(input).select().single()),
-    updateMember: (id, input) => one(sb.from('team_members').update(input).eq('id', id).select().single()),
+    async createMember(input) {
+      const specIds = input.specialization_ids && input.specialization_ids.length > 0
+        ? input.specialization_ids
+        : (input.specialization_id ? [input.specialization_id] : []);
+      const primarySpecId = input.specialization_id || specIds[0] || '';
+      const payload = {
+        ...input,
+        specialization_id: primarySpecId,
+        specialization_ids: specIds,
+      };
+
+      try {
+        const created = await one<TeamMember>(sb.from('team_members').insert(payload).select().single());
+        if (created.id && specIds.length > 0) setLocalMemberSpecs(created.id, specIds);
+        return {
+          ...created,
+          specialization_ids: (created as any).specialization_ids ?? specIds,
+        };
+      } catch (err: any) {
+        if (err?.message?.includes('specialization_ids') || err?.message?.includes('schema cache')) {
+          const { specialization_ids: _, ...fallbackPayload } = payload;
+          const created = await one<TeamMember>(sb.from('team_members').insert(fallbackPayload).select().single());
+          if (created.id && specIds.length > 0) setLocalMemberSpecs(created.id, specIds);
+          return {
+            ...created,
+            specialization_ids: specIds,
+          };
+        }
+        throw err;
+      }
+    },
+    async updateMember(id, input) {
+      const specIds = input.specialization_ids && input.specialization_ids.length > 0
+        ? input.specialization_ids
+        : (input.specialization_id ? [input.specialization_id] : undefined);
+      const primarySpecId = input.specialization_id || (specIds ? specIds[0] : undefined);
+      const payload = {
+        ...input,
+        ...(primarySpecId ? { specialization_id: primarySpecId } : {}),
+        ...(specIds ? { specialization_ids: specIds } : {}),
+      };
+
+      try {
+        const updated = await one<TeamMember>(sb.from('team_members').update(payload).eq('id', id).select().single());
+        if (specIds && specIds.length > 0) setLocalMemberSpecs(id, specIds);
+        return {
+          ...updated,
+          specialization_ids: (updated as any).specialization_ids ?? specIds ?? (updated.specialization_id ? [updated.specialization_id] : []),
+        };
+      } catch (err: any) {
+        if (err?.message?.includes('specialization_ids') || err?.message?.includes('schema cache')) {
+          const { specialization_ids: _, ...fallbackPayload } = payload;
+          const updated = await one<TeamMember>(sb.from('team_members').update(fallbackPayload).eq('id', id).select().single());
+          if (specIds && specIds.length > 0) setLocalMemberSpecs(id, specIds);
+          return {
+            ...updated,
+            specialization_ids: specIds ?? (updated.specialization_id ? [updated.specialization_id] : []),
+          };
+        }
+        throw err;
+      }
+    },
     async deleteMember(id) {
       const { error, count } = await sb.from('team_members').delete({ count: 'exact' }).eq('id', id);
       if (error) fail(error);
