@@ -16,9 +16,13 @@ create table if not exists public.track_tasks (
   priority text not null default 'medium' check (priority in ('low', 'medium', 'high')),
   due_date date,
   completed_at timestamptz,
+  subtasks jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Ensure subtasks column exists if table was created in an earlier migration
+alter table public.track_tasks add column if not exists subtasks jsonb not null default '[]'::jsonb;
 
 -- Indexes for fast query and filtering
 create index if not exists idx_track_tasks_specialization on public.track_tasks (specialization_id);

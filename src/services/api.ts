@@ -71,6 +71,9 @@ export interface Api {
   createTask(input: TrackTaskInput): Promise<TrackTask>;
   updateTask(id: string, input: Partial<TrackTaskInput>): Promise<TrackTask>;
   toggleTaskCompleted(id: string, is_completed: boolean): Promise<TrackTask>;
+  addSubtask(taskId: string, title: string): Promise<TrackTask>;
+  toggleSubtask(taskId: string, subtaskId: string, is_completed: boolean): Promise<TrackTask>;
+  deleteSubtask(taskId: string, subtaskId: string): Promise<TrackTask>;
   deleteTask(id: string): Promise<void>;
 }
 

@@ -76,6 +76,13 @@ export interface AppSettings {
 
 export type TaskPriority = 'low' | 'medium' | 'high';
 
+export interface TaskSubtask {
+  id: string;
+  title: string;
+  is_completed: boolean;
+  completed_at?: string | null;
+}
+
 export interface TrackTask {
   id: string;
   title: string;
@@ -90,6 +97,7 @@ export interface TrackTask {
   priority: TaskPriority;
   due_date: string | null;
   completed_at: string | null;
+  subtasks?: TaskSubtask[];
   created_at: string;
   updated_at: string;
 }
@@ -123,6 +131,7 @@ export interface TrackTaskInput {
   is_completed?: boolean;
   priority?: TaskPriority;
   due_date?: string | null;
+  subtasks?: TaskSubtask[];
 }
 
 

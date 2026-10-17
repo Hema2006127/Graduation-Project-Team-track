@@ -175,7 +175,38 @@ describe('demo API mirrors database rules', () => {
     expect(untoggled.is_completed).toBe(false);
     expect(untoggled.completed_at).toBeNull();
 
-    // 5. Update task
+    // 5. Update task and manage multiple subtasks in task details ("في تفاصيل المهمه تبقي في كذا تاسك")
+    const withSubtasks = await api.createTask({
+      title: 'Setup Endpoints & Documentation',
+      specialization_id: frontend.id,
+      session_id: targetSession.id,
+      week_number: 5,
+      subtasks: [
+        { id: 'sub-a', title: 'Write OpenAPI schema', is_completed: true },
+        { id: 'sub-b', title: 'Add auth middleware test', is_completed: false },
+      ],
+    });
+    expect(withSubtasks.subtasks).toHaveLength(2);
+    expect(withSubtasks.subtasks![0].is_completed).toBe(true);
+
+    // Add another subtask to the task
+    const addedSub = await api.addSubtask(withSubtasks.id, 'Deploy to staging');
+    expect(addedSub.subtasks).toHaveLength(3);
+    const lastSub = addedSub.subtasks![2];
+    expect(lastSub.title).toBe('Deploy to staging');
+    expect(lastSub.is_completed).toBe(false);
+
+    // Toggle subtask completed
+    const subToggled = await api.toggleSubtask(withSubtasks.id, lastSub.id, true);
+    expect(subToggled.subtasks!.find((s) => s.id === lastSub.id)?.is_completed).toBe(true);
+
+    // Delete subtask
+    const afterSubDelete = await api.deleteSubtask(withSubtasks.id, lastSub.id);
+    expect(afterSubDelete.subtasks).toHaveLength(2);
+
+    await api.deleteTask(withSubtasks.id);
+
+    // 6. Update task
     const updated = await api.updateTask(created.id, {
       title: 'Implement Dark Mode & Theme Toggle',
       priority: 'low',

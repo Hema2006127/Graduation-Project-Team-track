@@ -188,6 +188,7 @@ export interface SeedTask {
   is_completed: boolean;
   priority: 'low' | 'medium' | 'high';
   due_date: string | null;
+  subtasks?: { id: string; title: string; is_completed: boolean }[];
 }
 
 const sess = (titleKeyword: string) =>
@@ -206,6 +207,11 @@ export const SEED_TASKS: SeedTask[] = [
     is_completed: true,
     priority: 'high',
     due_date: '2026-10-04',
+    subtasks: [
+      { id: 'sub-1', title: 'Initialize Vite React project with TypeScript', is_completed: true },
+      { id: 'sub-2', title: 'Configure Tailwind CSS v4 styling & color palette', is_completed: true },
+      { id: 'sub-3', title: 'Setup react-router navigation and AppLayout', is_completed: true },
+    ],
   },
   {
     id: uuid('t1', 2),
@@ -230,6 +236,11 @@ export const SEED_TASKS: SeedTask[] = [
     is_completed: true,
     priority: 'high',
     due_date: '2026-10-18',
+    subtasks: [
+      { id: 'sub-4', title: 'Design task card component with session badges', is_completed: true },
+      { id: 'sub-5', title: 'Implement subtask checklist with instant toggle', is_completed: true },
+      { id: 'sub-6', title: 'Auto-detect registered member track & specialization', is_completed: true },
+    ],
   },
   {
     id: uuid('t1', 4),
@@ -318,6 +329,11 @@ export const SEED_TASKS: SeedTask[] = [
     is_completed: true,
     priority: 'high',
     due_date: '2026-10-11',
+    subtasks: [
+      { id: 'sub-7', title: 'إعداد حزم الكاميرا وتصريح الوصول في Android & iOS', is_completed: true },
+      { id: 'sub-8', title: 'تصميم واجهة الماسح والأنيميشن التفاعلي', is_completed: true },
+      { id: 'sub-9', title: 'فك تشفير كود الحضور والتحقق من الجلسة', is_completed: true },
+    ],
   },
   {
     id: uuid('t1', 11),
@@ -330,6 +346,11 @@ export const SEED_TASKS: SeedTask[] = [
     is_completed: false,
     priority: 'high',
     due_date: '2026-10-18',
+    subtasks: [
+      { id: 'sub-10', title: 'إعداد Hive local storage للتخزين المؤقت', is_completed: true },
+      { id: 'sub-11', title: 'ربط مزامنة التاسكات مع الـ REST API', is_completed: false },
+      { id: 'sub-12', title: 'معالجة حالة انقطاع الاتصال بالإنترنت (Offline Mode)', is_completed: false },
+    ],
   },
 
   // AI / Machine Learning
@@ -352,10 +373,15 @@ export const SEED_TASKS: SeedTask[] = [
     specialization_id: spec('AI / Machine Learning'),
     session_id: sess('AI Model Meeting'),
     week_number: 2,
-    assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Laila Mostafa')?.id ?? null,
+    assigned_member_id: SEED_MEMBERS.find((m) => m.full_name === 'Ahmed Mohamed')?.id ?? null,
     is_completed: true,
     priority: 'high',
     due_date: '2026-10-11',
+    subtasks: [
+      { id: 'sub-13', title: 'تجهيز مجموعة بيانات التدريب والاختبار (Train/Test Split)', is_completed: true },
+      { id: 'sub-14', title: 'تدريب النموذج الأساسي وحساب Accuracy & Loss', is_completed: true },
+      { id: 'sub-15', title: 'رسم مصفوفة الارتباك (Confusion Matrix) وتقييم النتائج', is_completed: true },
+    ],
   },
   {
     id: uuid('t1', 14),

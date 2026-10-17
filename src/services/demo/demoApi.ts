@@ -81,6 +81,7 @@ export function buildSeedDb(): DemoDb {
       priority: t.priority,
       due_date: t.due_date,
       completed_at: t.is_completed ? created : null,
+      subtasks: t.subtasks ? t.subtasks.map((st) => ({ ...st, completed_at: st.is_completed ? created : null })) : [],
       created_at: created,
       updated_at: created,
     };
@@ -110,6 +111,16 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         const parsed = JSON.parse(raw) as DemoDb;
         if (!parsed.tasks || !Array.isArray(parsed.tasks)) {
           parsed.tasks = buildSeedDb().tasks;
+        } else {
+          // re-seed tasks if they lack subtask seed data
+          const hasSeedSubtasks = parsed.tasks.some((t) => t.subtasks && t.subtasks.length > 0);
+          if (!hasSeedSubtasks) {
+            parsed.tasks = buildSeedDb().tasks;
+          } else {
+            parsed.tasks.forEach((t) => {
+              if (!t.subtasks) t.subtasks = [];
+            });
+          }
         }
         return parsed;
       }
@@ -462,6 +473,12 @@ export function createDemoApi(storage: Storage = localStorage): Api {
           priority: input.priority ?? 'medium',
           due_date: input.due_date || null,
           completed_at: input.is_completed ? t : null,
+          subtasks: (input.subtasks ?? []).map((st) => ({
+            id: st.id || uid(),
+            title: st.title.trim(),
+            is_completed: Boolean(st.is_completed),
+            completed_at: st.is_completed ? (st.completed_at || t) : null,
+          })),
           created_at: t,
           updated_at: t,
         };
@@ -499,10 +516,17 @@ export function createDemoApi(storage: Storage = localStorage): Api {
           task.is_completed = input.is_completed;
           task.completed_at = input.is_completed ? (task.completed_at || t) : null;
         }
+        if (input.subtasks !== undefined) {
+          task.subtasks = input.subtasks.map((st) => ({
+            id: st.id || uid(),
+            title: st.title.trim(),
+            is_completed: Boolean(st.is_completed),
+            completed_at: st.is_completed ? (st.completed_at || t) : null,
+          }));
+        }
         task.updated_at = t;
         return task;
       }),
-
 
     toggleTaskCompleted: (id, is_completed) =>
       tx(() => {
@@ -511,6 +535,66 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         const t = now();
         task.is_completed = is_completed;
         task.completed_at = is_completed ? t : null;
+        if (is_completed && task.subtasks && task.subtasks.length > 0) {
+          // If task marked completed, mark all subtasks completed too
+          task.subtasks.forEach((st) => {
+            st.is_completed = true;
+            st.completed_at = t;
+          });
+        }
+        task.updated_at = t;
+        return task;
+      }),
+
+    addSubtask: (taskId, title) =>
+      tx(() => {
+        if (!db.tasks) db.tasks = [];
+        const task = find(db.tasks, taskId, 'Task');
+        const t = now();
+        if (!task.subtasks) task.subtasks = [];
+        const newSubtask = {
+          id: uid(),
+          title: title.trim(),
+          is_completed: false,
+          completed_at: null,
+        };
+        task.subtasks.push(newSubtask);
+        task.updated_at = t;
+        return task;
+      }),
+
+    toggleSubtask: (taskId, subtaskId, is_completed) =>
+      tx(() => {
+        if (!db.tasks) db.tasks = [];
+        const task = find(db.tasks, taskId, 'Task');
+        const t = now();
+        if (!task.subtasks) task.subtasks = [];
+        const sub = task.subtasks.find((st) => st.id === subtaskId);
+        if (sub) {
+          sub.is_completed = is_completed;
+          sub.completed_at = is_completed ? t : null;
+        }
+        // If all subtasks are now completed, mark main task as completed
+        if (task.subtasks.length > 0 && task.subtasks.every((st) => st.is_completed)) {
+          task.is_completed = true;
+          task.completed_at = t;
+        } else if (!is_completed && task.is_completed) {
+          // If a subtask was unchecked and task was completed, uncomplete main task
+          task.is_completed = false;
+          task.completed_at = null;
+        }
+        task.updated_at = t;
+        return task;
+      }),
+
+    deleteSubtask: (taskId, subtaskId) =>
+      tx(() => {
+        if (!db.tasks) db.tasks = [];
+        const task = find(db.tasks, taskId, 'Task');
+        const t = now();
+        if (task.subtasks) {
+          task.subtasks = task.subtasks.filter((st) => st.id !== subtaskId);
+        }
         task.updated_at = t;
         return task;
       }),

@@ -1,5 +1,5 @@
 import { createClient, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js';
-import type { AttendanceRecord, Profile, Session, TeamMember, TrackTask } from '@/types';
+import type { AttendanceRecord, Profile, Session, TeamMember, TrackTask, TrackTaskInput } from '@/types';
 import { AppError, type Api } from './api';
 
 
@@ -243,6 +243,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
           priority: input.priority ?? 'medium',
           due_date: input.due_date ?? null,
           completed_at: input.is_completed ? t : null,
+          subtasks: input.subtasks ?? [],
           created_at: t,
           updated_at: t,
         };
@@ -286,9 +287,49 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
         const item = list.find((t) => t.id === id);
         if (!item) throw new AppError('Task not found');
         Object.assign(item, patch);
+        if (is_completed && item.subtasks) {
+          item.subtasks.forEach((st) => {
+            st.is_completed = true;
+            st.completed_at = now;
+          });
+        }
         localStorage.setItem('ta.tasks.fallback', JSON.stringify(list));
         return item;
       }
+    },
+    async addSubtask(taskId, title) {
+      const tasks = await this.listTasks();
+      const current = tasks.find((t) => t.id === taskId);
+      if (!current) throw new AppError('Task not found');
+      const subtasks = [
+        ...(current.subtasks ?? []),
+        { id: crypto.randomUUID(), title: title.trim(), is_completed: false, completed_at: null },
+      ];
+      return this.updateTask(taskId, { subtasks });
+    },
+    async toggleSubtask(taskId, subtaskId, is_completed) {
+      const tasks = await this.listTasks();
+      const current = tasks.find((t) => t.id === taskId);
+      if (!current) throw new AppError('Task not found');
+      const now = new Date().toISOString();
+      const subtasks = (current.subtasks ?? []).map((st) =>
+        st.id === subtaskId ? { ...st, is_completed, completed_at: is_completed ? now : null } : st,
+      );
+      const allDone = subtasks.length > 0 && subtasks.every((st) => st.is_completed);
+      const patch: Partial<TrackTaskInput> = { subtasks };
+      if (allDone) {
+        patch.is_completed = true;
+      } else if (!is_completed && current.is_completed) {
+        patch.is_completed = false;
+      }
+      return this.updateTask(taskId, patch);
+    },
+    async deleteSubtask(taskId, subtaskId) {
+      const tasks = await this.listTasks();
+      const current = tasks.find((t) => t.id === taskId);
+      if (!current) throw new AppError('Task not found');
+      const subtasks = (current.subtasks ?? []).filter((st) => st.id !== subtaskId);
+      return this.updateTask(taskId, { subtasks });
     },
     async deleteTask(id) {
       try {

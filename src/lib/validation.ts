@@ -86,6 +86,16 @@ export const trackTaskSchema = z.object({
     .transform((v) => (v === '' ? null : v))
     .nullable()
     .refine((v) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Enter a valid date (YYYY-MM-DD)'),
+  subtasks: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string().trim().min(1),
+        is_completed: z.boolean(),
+        completed_at: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 
 
