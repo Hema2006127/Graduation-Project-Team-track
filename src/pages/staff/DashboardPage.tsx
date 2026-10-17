@@ -65,23 +65,23 @@ export function DashboardPage() {
             <StatCard label="Average Attendance" value={formatRate(derived.ov.rate)} icon={<Percent className="size-5" />} tone="blue" hint="(Present + Late) ÷ counted" />
           </div>
 
-          <div className="card flex flex-col gap-4 border-blue-200 bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white p-4 sm:flex-row sm:items-center sm:justify-between shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-xs">
-                <CheckSquare className="size-5" />
+          <div className="card flex flex-col gap-4 border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-blue-50/60 to-white p-5 sm:flex-row sm:items-center sm:justify-between shadow-xs rounded-3xl">
+            <div className="flex items-center gap-3.5">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-500 text-white shadow-md shadow-indigo-500/25">
+                <CheckSquare className="size-6 stroke-[2.2]" />
               </div>
               <div className="min-w-0">
-                <p className="font-bold text-ink text-sm">Weekly Track Tasks & To-Do · مهام التراكات الأسبوعية</p>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  {tasksCompleted} of {tasks.length} tasks completed ({tasksRate}%) across graduation project tracks.
+                <p className="font-extrabold text-slate-900 text-sm sm:text-base">Weekly Track Tasks & To-Do · مهام التراكات الأسبوعية</p>
+                <p className="text-xs text-slate-600 font-medium mt-0.5">
+                  {tasksCompleted} من {tasks.length} مهام منجزة ({tasksRate}%) عبر كل تخصصات وتراكات المشروع.
                 </p>
               </div>
             </div>
             <Link
               to={role === 'guest' ? '/tasks' : `${base}/tasks`}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-primary-dark transition-colors self-start sm:self-auto"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/25 hover:shadow-md hover:from-indigo-700 hover:to-blue-700 transition-all self-start sm:self-auto cursor-pointer"
             >
-              Open Tasks & To-Do <ChevronRight className="size-3.5" />
+              فتح جدول المهام <ChevronRight className="size-4" />
             </Link>
           </div>
 

@@ -1,22 +1,24 @@
 @import 'tailwindcss';
 
-/* Brand palette (matches Tailwind defaults: blue-600, slate-50, slate-900, green-600, amber-500, red-600) */
+/* Brand palette: Modern Electric Indigo + Emerald + Amber + Rose */
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
+  --color-primary: #4f46e5;
+  --color-primary-dark: #4338ca;
+  --color-primary-light: #e0e7ff;
   --color-ink: #0f172a;
   --color-surface: #f8fafc;
-  --color-success: #16a34a;
+  --color-success: #10b981;
   --color-warning: #f59e0b;
-  --color-danger: #dc2626;
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --animate-toast-in: toast-in 180ms ease-out;
-  --animate-fade-in: fade-in 150ms ease-out;
-  --animate-pop-in: pop-in 160ms ease-out;
+  --color-danger: #ef4444;
+  --font-sans: 'Alexandria', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --animate-toast-in: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fade-in: fade-in 180ms ease-out;
+  --animate-pop-in: pop-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-up: slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
   to { opacity: 1; transform: none; }
 }
 @keyframes fade-in {
@@ -24,28 +26,89 @@
   to { opacity: 1; }
 }
 @keyframes pop-in {
-  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
 
 @layer base {
-  html { -webkit-tap-highlight-color: transparent; }
-  body { @apply bg-surface text-ink antialiased; }
-  :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply text-ink antialiased;
+    background-color: #f8fafc;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.04) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(59, 130, 246, 0.03) 0px, transparent 50%);
+    background-attachment: fixed;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
   input[type='date']::-webkit-calendar-picker-indicator,
-  input[type='time']::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
+  input[type='time']::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 150ms ease;
+  }
+  input[type='date']::-webkit-calendar-picker-indicator:hover,
+  input[type='time']::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
+  /* Sleek custom scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
 }
 
 @layer components {
-  .card { @apply min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm; }
-  .input {
-    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-ink shadow-sm
-      placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none
-      disabled:cursor-not-allowed disabled:bg-slate-100;
+  .card {
+    @apply min-w-0 rounded-2xl border border-slate-200/80 bg-white/95 shadow-xs backdrop-blur-xs transition-all duration-200;
   }
-  .input-error { @apply border-danger focus:border-danger focus:ring-danger/20; }
-  .table-base { @apply w-full text-left text-sm; }
-  .table-base th { @apply bg-slate-50 px-4 py-3 text-xs font-semibold tracking-wide text-slate-500 uppercase; }
-  .table-base td { @apply border-t border-slate-100 px-4 py-3 align-middle; }
-  .table-base tbody tr { @apply transition-colors hover:bg-slate-50/70; }
+  .card:hover {
+    @apply border-slate-300/80;
+  }
+  .glass-card {
+    @apply min-w-0 rounded-2xl border border-white/60 bg-white/80 shadow-sm backdrop-blur-md;
+  }
+  .input {
+    @apply block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-ink shadow-2xs
+      placeholder:text-slate-400 focus:border-primary focus:ring-4 focus:ring-primary/10 focus:outline-none
+      disabled:cursor-not-allowed disabled:bg-slate-100 transition-all duration-150;
+  }
+  .input-error {
+    @apply border-danger focus:border-danger focus:ring-danger/10;
+  }
+  .table-base {
+    @apply w-full text-start text-sm;
+  }
+  .table-base th {
+    @apply bg-slate-50/80 px-4 py-3 text-xs font-semibold tracking-wider text-slate-500 uppercase border-b border-slate-100;
+  }
+  .table-base td {
+    @apply border-t border-slate-100 px-4 py-3 align-middle transition-colors;
+  }
+  .table-base tbody tr {
+    @apply transition-colors hover:bg-slate-50/70;
+  }
 }

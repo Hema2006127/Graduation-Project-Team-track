@@ -42,17 +42,17 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-blue-50 via-surface to-slate-100 px-4 py-10">
+    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-indigo-50/60 via-surface to-blue-50/40 px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-blue-600/25">
-            <ClipboardCheck className="size-7" />
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-3xl bg-gradient-to-tr from-indigo-600 via-indigo-600 to-blue-500 text-white shadow-xl shadow-indigo-600/25">
+            <ClipboardCheck className="size-8 stroke-[2.2]" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Staff sign in</h1>
-          <p className="mt-1 text-sm text-slate-500">For the admin and the doctor. Everyone else can view without signing in.</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">تسجيل الدخول · Staff Sign In</h1>
+          <p className="mt-1.5 text-sm text-slate-500">للإدارة والمشرفين. يمكن للجميع استعراض ومتابعة المهام بدون حساب.</p>
         </div>
 
-        <form onSubmit={submit} noValidate className="card space-y-4 p-6 sm:p-8">
+        <form onSubmit={submit} noValidate className="card rounded-3xl border border-slate-200/80 bg-white/95 p-6 sm:p-8 shadow-xl shadow-indigo-950/5 backdrop-blur-md space-y-4">
           {formError && (
             <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
               {formError}

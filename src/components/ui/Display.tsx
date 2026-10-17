@@ -8,25 +8,34 @@ import { Button } from './Button';
 // ---- Badges -------------------------------------------------------------------
 type Tone = 'green' | 'red' | 'amber' | 'blue' | 'slate' | 'indigo';
 const TONE: Record<Tone, string> = {
-  green: 'bg-green-50 text-green-700 ring-green-600/20',
-  red: 'bg-red-50 text-red-700 ring-red-600/20',
+  green: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+  red: 'bg-rose-50 text-rose-700 ring-rose-600/20',
   amber: 'bg-amber-50 text-amber-800 ring-amber-600/25',
-  blue: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+  blue: 'bg-sky-50 text-sky-700 ring-sky-600/20',
   indigo: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   slate: 'bg-slate-100 text-slate-600 ring-slate-500/20',
 };
 const DOT: Record<Tone, string> = {
-  green: 'bg-success',
-  red: 'bg-danger',
-  amber: 'bg-warning',
-  blue: 'bg-primary',
-  indigo: 'bg-indigo-500',
+  green: 'bg-emerald-500',
+  red: 'bg-rose-500',
+  amber: 'bg-amber-500',
+  blue: 'bg-sky-500',
+  indigo: 'bg-indigo-600',
   slate: 'bg-slate-400',
+};
+
+const ICON_GRADIENT: Record<Tone, string> = {
+  indigo: 'bg-gradient-to-tr from-indigo-600 to-blue-500 text-white shadow-sm shadow-indigo-500/25',
+  blue: 'bg-gradient-to-tr from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-500/25',
+  green: 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-sm shadow-emerald-500/25',
+  amber: 'bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-sm shadow-amber-500/25',
+  red: 'bg-gradient-to-tr from-rose-600 to-red-500 text-white shadow-sm shadow-rose-500/25',
+  slate: 'bg-gradient-to-tr from-slate-700 to-slate-500 text-white shadow-sm shadow-slate-500/25',
 };
 
 export function Badge({ tone = 'slate', dot, children, className }: { tone?: Tone; dot?: boolean; children: ReactNode; className?: string }) {
   return (
-    <span className={clsx('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset', TONE[tone], className)}>
+    <span className={clsx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ring-1 ring-inset tracking-wide', TONE[tone], className)}>
       {dot && <span className={clsx('size-1.5 rounded-full', DOT[tone])} aria-hidden />}
       {children}
     </span>
@@ -71,24 +80,24 @@ export function PageHeader({ title, description, actions }: { title: string; des
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">{title}</h1>
+        {description && <p className="mt-1 text-sm text-slate-500 font-medium">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
     </div>
   );
 }
 
 export function Card({ title, actions, children, className, bodyClassName }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) {
   return (
-    <section className={clsx('card min-w-0', className)}>
+    <section className={clsx('card min-w-0 overflow-hidden', className)}>
       {(title || actions) && (
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
-          {typeof title === 'string' ? <h2 className="text-sm font-semibold text-ink">{title}</h2> : title}
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100/80 px-6 py-4 bg-slate-50/40">
+          {typeof title === 'string' ? <h2 className="text-sm font-bold text-slate-800">{title}</h2> : title}
           {actions}
         </div>
       )}
-      <div className={bodyClassName ?? 'p-5'}>{children}</div>
+      <div className={bodyClassName ?? 'p-6'}>{children}</div>
     </section>
   );
 }
@@ -107,12 +116,14 @@ export function StatCard({
   hint?: ReactNode;
 }) {
   return (
-    <div className="card flex items-center gap-4 p-4">
-      <div className={clsx('flex size-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset', TONE[tone])}>{icon}</div>
-      <div className="min-w-0">
-        <p className="truncate text-xs font-medium text-slate-500">{label}</p>
-        <p className="text-2xl font-bold tracking-tight text-ink tabular-nums">{value}</p>
-        {hint && <p className="truncate text-xs text-slate-400">{hint}</p>}
+    <div className="card group relative flex items-center gap-4 p-4.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div className={clsx('flex size-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105', ICON_GRADIENT[tone])}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-semibold text-slate-500 tracking-wide">{label}</p>
+        <p className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 tabular-nums">{value}</p>
+        {hint && <p className="truncate text-xs text-slate-400 mt-0.5">{hint}</p>}
       </div>
     </div>
   );

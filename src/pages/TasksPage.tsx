@@ -1092,36 +1092,36 @@ export function TasksPage() {
       <div
         key={task.id}
         className={clsx(
-          'group relative flex flex-col rounded-xl border p-4 transition-all duration-200',
+          'group relative flex flex-col rounded-2xl border p-4.5 transition-all duration-200',
           task.is_completed
-            ? 'bg-slate-50/70 border-slate-200/80 shadow-2xs'
-            : 'bg-white border-slate-200 shadow-xs hover:border-blue-300 hover:shadow-md',
+            ? 'bg-slate-50/70 border-slate-200/70 shadow-2xs opacity-90'
+            : 'bg-white border-slate-200/90 shadow-2xs hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5',
         )}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="flex items-start gap-3.5 min-w-0 flex-1">
             {/* Main Task Checkbox */}
             <button
               type="button"
               onClick={() => toggleMutation.mutate({ id: task.id, completed: !task.is_completed })}
               className={clsx(
-                'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border transition-all duration-150 cursor-pointer',
+                'mt-0.5 flex size-6.5 shrink-0 items-center justify-center rounded-xl border-2 transition-all duration-200 active:scale-90 cursor-pointer',
                 task.is_completed
-                  ? 'border-emerald-600 bg-emerald-600 text-white shadow-xs'
-                  : 'border-slate-300 bg-white text-transparent hover:border-emerald-500 hover:bg-emerald-50/50',
+                  ? 'border-emerald-600 bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-xs shadow-emerald-500/30'
+                  : 'border-slate-300 bg-white text-transparent hover:border-indigo-500 hover:bg-indigo-50/40',
               )}
               title={task.is_completed ? 'Mark task as pending' : 'Mark task as completed (عملو ولا لا)'}
             >
               <Check className="size-4 stroke-[3]" />
             </button>
 
-            <div className="min-w-0 flex-1 space-y-1">
+            <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <h3
                   onClick={() => setViewingDetailsTask(task)}
                   className={clsx(
-                    'text-sm font-semibold transition-all cursor-pointer hover:text-primary',
-                    task.is_completed ? 'line-through text-slate-500 font-medium' : 'text-ink',
+                    'text-sm font-bold tracking-tight transition-all cursor-pointer hover:text-indigo-600',
+                    task.is_completed ? 'line-through text-slate-400 font-medium' : 'text-slate-900',
                   )}
                 >
                   {task.title}
@@ -1143,10 +1143,10 @@ export function TasksPage() {
                     type="button"
                     onClick={() => toggleAccordion(task.id)}
                     className={clsx(
-                      'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold transition-colors cursor-pointer',
+                      'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-xs font-semibold transition-all cursor-pointer',
                       completedSubCount === subtasks.length
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100',
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
+                        : 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 hover:bg-indigo-100',
                     )}
                   >
                     <ListChecks className="size-3" />
@@ -1307,10 +1307,14 @@ export function TasksPage() {
 
       {/* 2. Registered Member & Responsible Track Banner */}
       {registeredMember && registeredSpecialization && (
-        <div className="rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-500 via-indigo-600 to-purple-600 p-4 text-white shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full ring-2 ring-white/50 shrink-0">
+        <div className="relative overflow-hidden rounded-3xl border border-indigo-500/30 bg-gradient-to-r from-indigo-900 via-indigo-700 to-purple-800 p-5 sm:p-6 text-white shadow-lg shadow-indigo-950/15">
+          {/* Subtle Ambient Decorative Glows */}
+          <div className="absolute -top-16 -end-16 size-48 rounded-full bg-indigo-400/20 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-16 -start-16 size-48 rounded-full bg-purple-500/20 blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+            <div className="flex items-center gap-3.5">
+              <div className="rounded-2xl ring-3 ring-white/30 shrink-0 shadow-md">
                 <Avatar
                   name={registeredMember.full_name}
                   src={registeredMember.avatar_url}
@@ -1319,20 +1323,20 @@ export function TasksPage() {
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold text-base tracking-tight">{registeredMember.full_name}</span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold backdrop-blur-xs">
+                  <span className="font-extrabold text-base sm:text-lg tracking-tight">{registeredMember.full_name}</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold backdrop-blur-md">
                     <UserCheck className="size-3" /> {registeredMember.member_code}
                   </span>
                   {registeredSpecializations.map((spec) => (
-                    <span key={spec.id} className="inline-flex items-center gap-1 rounded-full bg-amber-400 text-slate-900 px-2.5 py-0.5 text-xs font-bold shadow-xs">
+                    <span key={spec.id} className="inline-flex items-center gap-1 rounded-full bg-amber-400 text-slate-950 px-2.5 py-0.5 text-xs font-extrabold shadow-sm">
                       {spec.name}
                     </span>
                   ))}
                 </div>
-                <p className="mt-1 text-xs text-blue-100 flex items-center gap-1.5">
-                  <Sparkles className="size-3.5 text-yellow-300" />
+                <p className="mt-1 text-xs text-indigo-100/90 font-medium flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-amber-300 shrink-0" />
                   <span>
-                    تم قراءة {registeredSpecializations.length > 1 ? 'التراكات المسؤولة' : 'التراك المسؤول'} من تخصصك تلقائياً ({registeredSpecializations.map((s) => s.name).join(' · ')}) وضبط العرض والتاسكات عليها.
+                    تم قراءة {registeredSpecializations.length > 1 ? 'التراكات المسؤولة' : 'التراك المسؤول'} تلقائياً ({registeredSpecializations.map((s) => s.name).join(' · ')}) وضبط العرض والتاسكات عليها.
                   </span>
                 </p>
               </div>
@@ -1345,10 +1349,10 @@ export function TasksPage() {
                     type="button"
                     onClick={() => setSelectedTrackId('my_tracks')}
                     className={clsx(
-                      'rounded-xl px-3 py-1.5 text-xs font-bold transition-all shadow-xs cursor-pointer',
+                      'rounded-xl px-3.5 py-1.5 text-xs font-extrabold transition-all shadow-sm cursor-pointer active:scale-95',
                       selectedTrackId === 'my_tracks'
-                        ? 'bg-white text-primary'
-                        : 'bg-white/20 text-white hover:bg-white/30',
+                        ? 'bg-white text-indigo-700 shadow-white/20'
+                        : 'bg-white/15 text-white hover:bg-white/25 backdrop-blur-md',
                     )}
                   >
                     ⭐ كل تخصصاتي
@@ -1359,10 +1363,10 @@ export function TasksPage() {
                       type="button"
                       onClick={() => setSelectedTrackId(spec.id)}
                       className={clsx(
-                        'rounded-xl px-2.5 py-1 text-xs font-bold transition-all shadow-xs cursor-pointer',
+                        'rounded-xl px-3.5 py-1.5 text-xs font-extrabold transition-all shadow-sm cursor-pointer active:scale-95',
                         selectedTrackId === spec.id
-                          ? 'bg-amber-400 text-slate-900'
-                          : 'bg-white/20 text-white hover:bg-white/30',
+                          ? 'bg-amber-400 text-slate-950 shadow-amber-400/25'
+                          : 'bg-white/15 text-white hover:bg-white/25 backdrop-blur-md',
                       )}
                     >
                       {spec.name}
@@ -1375,10 +1379,10 @@ export function TasksPage() {
                     type="button"
                     onClick={() => setSelectedTrackId(registeredSpecialization.id)}
                     className={clsx(
-                      'rounded-xl px-3 py-1.5 text-xs font-bold transition-all shadow-xs cursor-pointer',
+                      'rounded-xl px-3.5 py-1.5 text-xs font-extrabold transition-all shadow-sm cursor-pointer active:scale-95',
                       selectedTrackId === registeredSpecialization.id
-                        ? 'bg-white text-primary'
-                        : 'bg-white/20 text-white hover:bg-white/30',
+                        ? 'bg-white text-indigo-700 shadow-white/20'
+                        : 'bg-white/15 text-white hover:bg-white/25 backdrop-blur-md',
                     )}
                   >
                     ⭐ عرض تاسكات تخصصي فقط
@@ -1403,7 +1407,7 @@ export function TasksPage() {
                     setSelectedTrackId(memberSpecs[0]);
                   }
                 }}
-                className="rounded-xl bg-white/20 text-white px-2.5 py-1.5 text-xs font-medium backdrop-blur-xs border border-white/30 focus:outline-none cursor-pointer"
+                className="rounded-xl bg-white/15 text-white px-3 py-1.5 text-xs font-semibold backdrop-blur-md border border-white/20 focus:outline-none cursor-pointer"
                 title="تبديل العضو المتسجل لمعاينة تخصص آخر"
               >
                 {members.map((m) => {
@@ -1413,7 +1417,7 @@ export function TasksPage() {
                     .filter(Boolean)
                     .join(' · ');
                   return (
-                    <option key={m.id} value={m.id} className="text-slate-800">
+                    <option key={m.id} value={m.id} className="text-slate-800 font-medium">
                       {m.full_name} · {mSpecs || 'بدون تخصص'}
                     </option>
                   );
@@ -1485,17 +1489,17 @@ export function TasksPage() {
             type="button"
             onClick={() => setSelectedTrackId('all')}
             className={clsx(
-              'flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+              'flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold whitespace-nowrap transition-all cursor-pointer active:scale-95',
               selectedTrackId === 'all'
-                ? 'bg-primary text-white shadow-sm shadow-blue-500/25 ring-2 ring-primary ring-offset-1'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80',
+                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm shadow-indigo-500/25'
+                : 'bg-slate-100/90 text-slate-700 hover:bg-slate-200/80',
             )}
           >
             <Layers className="size-3.5" />
             <span>كل التراكات</span>
             <span
               className={clsx(
-                'rounded-full px-1.5 py-0.2 text-[10px] font-bold',
+                'rounded-full px-2 py-0.5 text-[10px] font-extrabold',
                 selectedTrackId === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700',
               )}
             >
@@ -1508,10 +1512,10 @@ export function TasksPage() {
               type="button"
               onClick={() => setSelectedTrackId('my_tracks')}
               className={clsx(
-                'flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+                'flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold whitespace-nowrap transition-all cursor-pointer active:scale-95',
                 selectedTrackId === 'my_tracks'
-                  ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/25 ring-2 ring-amber-500 ring-offset-1'
-                  : 'bg-amber-50 text-amber-900 border border-amber-300 font-bold hover:bg-amber-100',
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm shadow-amber-500/25'
+                  : 'bg-amber-50 text-amber-950 border border-amber-200/80 font-bold hover:bg-amber-100/70',
               )}
             >
               <Sparkles className="size-3.5" />
@@ -1531,21 +1535,21 @@ export function TasksPage() {
                 type="button"
                 onClick={() => setSelectedTrackId(spec.id)}
                 className={clsx(
-                  'flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+                  'flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold whitespace-nowrap transition-all cursor-pointer active:scale-95',
                   isSelected
-                    ? 'bg-primary text-white shadow-sm shadow-blue-500/25 ring-2 ring-primary ring-offset-1'
+                    ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm shadow-indigo-500/25'
                     : isRegisteredUserTrack
-                    ? 'bg-blue-50 text-blue-900 border border-blue-300 font-bold hover:bg-blue-100'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80',
+                    ? 'bg-indigo-50/90 text-indigo-900 border border-indigo-200/90 font-bold hover:bg-indigo-100/80'
+                    : 'bg-slate-100/90 text-slate-700 hover:bg-slate-200/80',
                 )}
               >
                 <TrackIcon className="size-3.5" />
                 <span>
-                  {isRegisteredUserTrack ? `⭐ ${spec.name} (من تخصصاتي)` : spec.name}
+                  {isRegisteredUserTrack ? `⭐ ${spec.name} (تخصصي)` : spec.name}
                 </span>
                 <span
                   className={clsx(
-                    'rounded-full px-1.5 py-0.2 text-[10px] font-bold',
+                    'rounded-full px-2 py-0.5 text-[10px] font-extrabold',
                     isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700',
                   )}
                 >
@@ -1668,33 +1672,33 @@ export function TasksPage() {
             return (
               <div
                 key={group.sessionId}
-                className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs transition-all hover:shadow-md"
+                className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-xs transition-all duration-200 hover:shadow-md"
               >
                 {/* Session Card Header */}
-                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-purple-50/20 to-blue-50/20 p-4 sm:p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="flex size-7 items-center justify-center rounded-lg bg-purple-100 text-purple-700">
-                          <CalendarCheck2 className="size-4" />
+                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/25 to-purple-50/20 p-5 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-sm shadow-purple-500/25">
+                          <CalendarCheck2 className="size-4.5 stroke-[2.2]" />
                         </span>
-                        <h2 className="text-base font-bold text-ink tracking-tight">{group.title}</h2>
+                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">{group.title}</h2>
                         {group.total > 0 && (
-                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                          <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-xs font-bold text-slate-700">
                             {group.total} مهام
                           </span>
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-0.5">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-medium pt-0.5">
                         {group.date && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="size-3.5 text-slate-400" />
+                          <span className="flex items-center gap-1.5">
+                            <Calendar className="size-3.5 text-indigo-500" />
                             <span>تاريخ السيشن: {formatDate(group.date)}</span>
                           </span>
                         )}
                         {group.location && (
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1.5">
                             <MapPin className="size-3.5 text-slate-400" />
                             <span>{group.location}</span>
                           </span>
@@ -1705,14 +1709,14 @@ export function TasksPage() {
                     {/* Progress Bar & Add Task Button */}
                     <div className="flex items-center gap-4">
                       {group.total > 0 && (
-                        <div className="flex items-center gap-2 text-xs">
-                          <div className="w-24 sm:w-32 bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div className="flex items-center gap-2.5 text-xs">
+                          <div className="w-24 sm:w-36 bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/60">
                             <div
-                              className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                              className="bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300"
                               style={{ width: `${percent}%` }}
                             />
                           </div>
-                          <span className="font-bold text-slate-700 whitespace-nowrap">
+                          <span className="font-extrabold text-slate-800 whitespace-nowrap">
                             {group.completed}/{group.total} ({percent}%)
                           </span>
                         </div>
@@ -1762,24 +1766,24 @@ export function TasksPage() {
             return (
               <div
                 key={group.specId}
-                className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs"
+                className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-xs transition-all duration-200 hover:shadow-md"
               >
-                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30 p-4 sm:p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-                        <TrackIcon className="size-5" />
+                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-blue-50/20 p-5 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <span className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-500 text-white shadow-sm shadow-indigo-500/25">
+                        <TrackIcon className="size-5 stroke-[2.2]" />
                       </span>
                       <div>
-                        <h2 className="text-base font-bold text-ink">{group.name}</h2>
+                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">{group.name}</h2>
                         {group.specialization?.description && (
-                          <p className="text-xs text-slate-500">{group.specialization.description}</p>
+                          <p className="text-xs text-slate-500 font-medium">{group.specialization.description}</p>
                         )}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-slate-700">
+                      <span className="text-xs font-extrabold text-slate-800">
                         {group.completed}/{group.total} منجز ({percent}%)
                       </span>
                       <Button

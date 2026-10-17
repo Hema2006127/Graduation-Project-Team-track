@@ -6,23 +6,27 @@ type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
 type Size = 'sm' | 'md' | 'lg';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-primary text-white hover:bg-primary-dark shadow-sm',
-  secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm',
-  danger: 'bg-danger text-white hover:bg-red-700 shadow-sm',
-  success: 'bg-success text-white hover:bg-green-700 shadow-sm',
-  ghost: 'text-slate-600 hover:bg-slate-100 hover:text-ink',
+  primary:
+    'bg-gradient-to-r from-indigo-600 via-indigo-600 to-blue-600 text-white shadow-sm shadow-indigo-500/25 hover:shadow-md hover:shadow-indigo-500/35 hover:from-indigo-700 hover:to-blue-700 active:scale-[0.98]',
+  secondary:
+    'bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50 hover:border-slate-300 shadow-2xs hover:shadow-xs active:scale-[0.98]',
+  danger:
+    'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-sm shadow-rose-500/25 hover:shadow-md hover:shadow-rose-500/35 hover:from-rose-700 hover:to-red-700 active:scale-[0.98]',
+  success:
+    'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm shadow-emerald-500/25 hover:shadow-md hover:shadow-emerald-500/35 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98]',
+  ghost: 'text-slate-600 hover:bg-slate-100/90 hover:text-ink active:scale-[0.98]',
 };
 const SIZES: Record<Size, string> = {
-  sm: 'h-8 px-3 text-xs gap-1.5',
-  md: 'h-10 px-4 text-sm gap-2',
-  lg: 'h-12 px-5 text-base gap-2',
+  sm: 'h-8 px-3 rounded-lg text-xs gap-1.5 font-medium',
+  md: 'h-10 px-4 rounded-xl text-sm gap-2 font-medium',
+  lg: 'h-12 px-5 rounded-xl text-base gap-2.5 font-semibold',
 };
 
 /** Classes for links that look like buttons (never nest <button> in <a>). */
 export const buttonClass = (variant: Variant = 'primary', size: Size = 'md', className?: string) =>
   clsx(
-    'inline-flex shrink-0 items-center justify-center rounded-lg font-medium whitespace-nowrap transition-colors',
-    'disabled:cursor-not-allowed disabled:opacity-60',
+    'inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all duration-150 cursor-pointer select-none',
+    'disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none',
     VARIANTS[variant],
     SIZES[size],
     className,

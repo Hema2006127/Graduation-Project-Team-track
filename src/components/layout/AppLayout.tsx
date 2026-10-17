@@ -52,17 +52,20 @@ const NAV: Record<Viewer, NavItem[]> = {
 function Sidebar({ role, onNavigate }: { role: Viewer; onNavigate?: () => void }) {
   const org = useSettings().data?.organization_name;
   return (
-    <div className="flex h-full flex-col">
-      <Link to={homePath(role)} onClick={onNavigate} className="flex items-center gap-3 px-5 py-5">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-white shadow-sm">
-          <ClipboardCheck className="size-5" />
+    <div className="flex h-full flex-col bg-white/95 backdrop-blur-md">
+      <Link to={homePath(role)} onClick={onNavigate} className="flex items-center gap-3.5 px-5 py-5 border-b border-slate-100/90">
+        <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-600 to-blue-500 text-white shadow-md shadow-indigo-500/25 shrink-0">
+          <ClipboardCheck className="size-6 stroke-[2.2]" />
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-ink">Team Attendance</p>
-          <p className="truncate text-xs text-slate-500">{org ?? 'Session tracking'}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-base font-extrabold tracking-tight text-slate-900">TeamTrack</p>
+            <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 ring-1 ring-inset ring-indigo-500/20">PRO</span>
+          </div>
+          <p className="truncate text-xs text-slate-500 font-medium">{org ?? 'إدارة الفرق والتاسكات'}</p>
         </div>
       </Link>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2" aria-label="Main">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3.5 py-3" aria-label="Main">
         {NAV[role].map((item) => (
           <NavLink
             key={item.to}
@@ -71,26 +74,36 @@ function Sidebar({ role, onNavigate }: { role: Viewer; onNavigate?: () => void }
             onClick={onNavigate}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                isActive ? 'bg-blue-50 text-primary' : 'text-slate-600 hover:bg-slate-100 hover:text-ink',
+                'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150',
+                isActive
+                  ? 'bg-gradient-to-r from-indigo-50 via-indigo-50/70 to-blue-50/40 text-indigo-600 shadow-2xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
               )
             }
           >
-            <item.icon className="size-[18px] shrink-0" aria-hidden />
+            <item.icon className="size-[19px] shrink-0" aria-hidden />
             {item.label}
           </NavLink>
         ))}
       </nav>
       {role === 'guest' && (
-        <div className="m-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-          <p className="font-semibold text-slate-700">View only</p>
-          <p className="mt-0.5">You are viewing the team’s attendance. Only the admin and the doctor can make changes.</p>
+        <div className="m-3 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-blue-50/40 p-3.5 text-xs text-slate-600 shadow-2xs">
+          <p className="font-bold text-indigo-900 flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-indigo-500 animate-pulse" />
+            وضع المشاهدة (View Only)
+          </p>
+          <p className="mt-1 text-slate-600 leading-relaxed">
+            يمكنك استعراض ومتابعة جلسات وتاسكات الفريق مباشرة.
+          </p>
         </div>
       )}
       {api.mode === 'demo' && (
-        <div className="m-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          <p className="font-semibold">Demo mode</p>
-          <p className="mt-0.5 text-amber-800">Data is stored in this browser. Connect Supabase for production.</p>
+        <div className="m-3 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 p-3.5 text-xs text-amber-950 shadow-2xs">
+          <p className="font-bold flex items-center gap-1.5 text-amber-900">
+            <span className="size-2 rounded-full bg-amber-500" />
+            الوضع التجريبي (Demo Mode)
+          </p>
+          <p className="mt-1 text-amber-800 leading-relaxed">البيانات تُحفظ في هذا المتصفح محلياً.</p>
         </div>
       )}
     </div>
@@ -175,16 +188,16 @@ export function AppLayout() {
   return (
     <div className="min-h-dvh">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-slate-200 bg-white lg:block">
+      <aside className="fixed inset-y-0 start-0 z-30 hidden w-64 border-e border-slate-200/80 bg-white/95 backdrop-blur-md lg:block">
         <Sidebar role={role} />
       </aside>
 
       {/* Mobile drawer */}
       {drawer && (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 animate-fade-in bg-slate-900/40" onClick={() => setDrawer(false)} aria-hidden />
-          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] animate-pop-in bg-white shadow-xl">
-            <button onClick={() => setDrawer(false)} className="absolute top-5 right-3 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Close menu">
+          <div className="absolute inset-0 animate-fade-in bg-slate-900/40 backdrop-blur-xs" onClick={() => setDrawer(false)} aria-hidden />
+          <aside className="absolute inset-y-0 start-0 w-72 max-w-[85vw] animate-pop-in bg-white shadow-2xl">
+            <button onClick={() => setDrawer(false)} className="absolute top-5 end-3 rounded-xl p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Close menu">
               <X className="size-5" />
             </button>
             <Sidebar role={role} onNavigate={() => setDrawer(false)} />
@@ -192,15 +205,15 @@ export function AppLayout() {
         </div>
       )}
 
-      <div className="lg:pl-64">
+      <div className="lg:ps-64">
         <header
-          className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/85 px-4 backdrop-blur sm:px-6"
+          className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-md sm:px-6 shadow-2xs"
           style={{ paddingTop: 'env(safe-area-inset-top)' }}
         >
-          <button onClick={() => setDrawer(true)} className="-ml-1 rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label="Open menu" data-testid="open-menu">
+          <button onClick={() => setDrawer(true)} className="-ms-1 rounded-xl p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label="Open menu" data-testid="open-menu">
             <Menu className="size-5" />
           </button>
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">{title ?? ''}</p>
+          <p className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{title ?? ''}</p>
           {role === 'guest' ? (
             <Link to="/login" className={buttonClass('secondary', 'sm')} data-testid="staff-sign-in">
               <LogIn className="size-4" /> Staff sign in
