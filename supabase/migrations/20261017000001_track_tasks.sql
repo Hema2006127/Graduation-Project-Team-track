@@ -9,6 +9,7 @@ create table if not exists public.track_tasks (
   description text,
   specialization_id uuid not null references public.specializations(id) on delete cascade,
   session_id uuid references public.sessions(id) on delete cascade,
+  session_title text,
   week_number integer not null default 1 check (week_number between 1 and 52),
   assigned_member_id uuid references public.team_members(id) on delete set null,
   assigned_member_name text,
@@ -21,7 +22,9 @@ create table if not exists public.track_tasks (
   updated_at timestamptz not null default now()
 );
 
--- Ensure subtasks column exists if table was created in an earlier migration
+-- Ensure all columns exist if table was created in an earlier partial run
+alter table public.track_tasks add column if not exists session_title text;
+alter table public.track_tasks add column if not exists assigned_member_name text;
 alter table public.track_tasks add column if not exists subtasks jsonb not null default '[]'::jsonb;
 
 -- Indexes for fast query and filtering
@@ -30,17 +33,20 @@ create index if not exists idx_track_tasks_session on public.track_tasks (sessio
 create index if not exists idx_track_tasks_week on public.track_tasks (week_number);
 create index if not exists idx_track_tasks_completed on public.track_tasks (is_completed);
 
-
 -- Enable RLS
 alter table public.track_tasks enable row level security;
 
--- Policies:
--- Anyone (anon + authenticated) can view tasks
+-- Policies (idempotent):
+drop policy if exists "tasks: public read" on public.track_tasks;
 create policy "tasks: public read" on public.track_tasks for select to anon, authenticated using (true);
 
--- Anyone (or authenticated) can insert, update, delete tasks
+drop policy if exists "tasks: public insert" on public.track_tasks;
 create policy "tasks: public insert" on public.track_tasks for insert to anon, authenticated with check (true);
+
+drop policy if exists "tasks: public update" on public.track_tasks;
 create policy "tasks: public update" on public.track_tasks for update to anon, authenticated using (true) with check (true);
+
+drop policy if exists "tasks: public delete" on public.track_tasks;
 create policy "tasks: public delete" on public.track_tasks for delete to anon, authenticated using (true);
 
 -- Grant privileges

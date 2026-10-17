@@ -109,6 +109,94 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
     return (data.session ? '*' : PUBLIC_COLUMNS[table]) as '*';
   }
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  function sanitizeTaskPayload(input: Partial<TrackTaskInput>): Record<string, any> {
+    const payload: Record<string, any> = { ...input };
+    if ('session_id' in payload) {
+      const val = typeof payload.session_id === 'string' ? payload.session_id.trim() : payload.session_id;
+      payload.session_id = val && UUID_REGEX.test(val) ? val : null;
+    }
+    if ('assigned_member_id' in payload) {
+      const val = typeof payload.assigned_member_id === 'string' ? payload.assigned_member_id.trim() : payload.assigned_member_id;
+      payload.assigned_member_id = val && UUID_REGEX.test(val) ? val : null;
+    }
+    if ('due_date' in payload) {
+      const val = typeof payload.due_date === 'string' ? payload.due_date.trim() : payload.due_date;
+      payload.due_date = val || null;
+    }
+    if ('description' in payload) {
+      const val = typeof payload.description === 'string' ? payload.description.trim() : payload.description;
+      payload.description = val || null;
+    }
+    if ('session_title' in payload) {
+      const val = typeof payload.session_title === 'string' ? payload.session_title.trim() : payload.session_title;
+      payload.session_title = val || null;
+    }
+    if ('assigned_member_name' in payload) {
+      const val = typeof payload.assigned_member_name === 'string' ? payload.assigned_member_name.trim() : payload.assigned_member_name;
+      payload.assigned_member_name = val || null;
+    }
+    return payload;
+  }
+
+  async function syncLocalFallbackTasks() {
+    const raw = localStorage.getItem('ta.tasks.fallback');
+    if (!raw) return;
+    try {
+      const list: TrackTask[] = JSON.parse(raw);
+      if (!Array.isArray(list) || list.length === 0) {
+        localStorage.removeItem('ta.tasks.fallback');
+        return;
+      }
+
+      const remaining: TrackTask[] = [];
+      for (const t of list) {
+        // Must have valid UUID for specialization_id to be stored in Supabase
+        if (!t.specialization_id || !UUID_REGEX.test(t.specialization_id)) {
+          remaining.push(t);
+          continue;
+        }
+
+        const payload: Record<string, any> = {
+          title: t.title,
+          description: t.description?.trim() || null,
+          specialization_id: t.specialization_id,
+          session_id: t.session_id && UUID_REGEX.test(t.session_id) ? t.session_id : null,
+          session_title: t.session_title?.trim() || null,
+          week_number: t.week_number ?? 1,
+          assigned_member_id: t.assigned_member_id && UUID_REGEX.test(t.assigned_member_id) ? t.assigned_member_id : null,
+          assigned_member_name: t.assigned_member_name?.trim() || null,
+          is_completed: Boolean(t.is_completed),
+          priority: t.priority ?? 'medium',
+          due_date: t.due_date?.trim() || null,
+          completed_at: t.completed_at || null,
+          subtasks: t.subtasks ?? [],
+          created_at: t.created_at || new Date().toISOString(),
+          updated_at: t.updated_at || new Date().toISOString(),
+        };
+
+        if (t.id && UUID_REGEX.test(t.id)) {
+          payload.id = t.id;
+        }
+
+        const { error } = await sb.from('track_tasks').upsert(payload, { onConflict: 'id' });
+        if (error) {
+          console.warn('[syncLocalFallbackTasks] Failed to sync task:', t.title, error);
+          remaining.push(t);
+        }
+      }
+
+      if (remaining.length === 0) {
+        localStorage.removeItem('ta.tasks.fallback');
+      } else {
+        localStorage.setItem('ta.tasks.fallback', JSON.stringify(remaining));
+      }
+    } catch (err) {
+      console.warn('[syncLocalFallbackTasks] Error syncing fallback tasks:', err);
+    }
+  }
+
   const api: Api = {
     mode: 'supabase',
 
@@ -298,9 +386,16 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
         if (filter.weekNumber) q = q.eq('week_number', filter.weekNumber);
         const { data, error } = await q;
         if (error) throw error;
-        return (data ?? []) as TrackTask[];
-      } catch {
-        // Fallback to local storage if remote table is not configured yet
+
+        // Auto-sync any previously created local tasks into Supabase
+        await syncLocalFallbackTasks();
+
+        // Fetch refreshed data if any local tasks were just synced
+        const refreshed = await q;
+        const result = (refreshed.data ?? data ?? []) as TrackTask[];
+        return result;
+      } catch (err) {
+        console.warn('[listTasks] Remote query failed, using local storage:', err);
         const raw = localStorage.getItem('ta.tasks.fallback');
         let list: TrackTask[] = raw ? JSON.parse(raw) : [];
         if (filter.specializationId) list = list.filter((t) => t.specialization_id === filter.specializationId);
@@ -310,27 +405,32 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
       }
     },
     async createTask(input) {
+      const sanitized = sanitizeTaskPayload(input);
       try {
-        const { data, error } = await sb.from('track_tasks').insert(input).select().single();
-        if (error) throw error;
+        const { data, error } = await sb.from('track_tasks').insert(sanitized).select().single();
+        if (error) {
+          console.error('[createTask] Supabase insert error:', error);
+          throw error;
+        }
         return data as TrackTask;
-      } catch {
+      } catch (err) {
+        console.warn('[createTask] Falling back to local storage:', err);
         const raw = localStorage.getItem('ta.tasks.fallback');
         const list: TrackTask[] = raw ? JSON.parse(raw) : [];
         const t = new Date().toISOString();
         const newTask: TrackTask = {
           id: crypto.randomUUID(),
           title: input.title,
-          description: input.description ?? null,
+          description: input.description?.trim() || null,
           specialization_id: input.specialization_id,
-          session_id: input.session_id ?? null,
-          session_title: input.session_title ?? null,
+          session_id: sanitized.session_id ?? null,
+          session_title: sanitized.session_title ?? null,
           week_number: input.week_number ?? 1,
-          assigned_member_id: input.assigned_member_id ?? null,
-          assigned_member_name: input.assigned_member_name ?? null,
+          assigned_member_id: sanitized.assigned_member_id ?? null,
+          assigned_member_name: sanitized.assigned_member_name ?? null,
           is_completed: Boolean(input.is_completed),
           priority: input.priority ?? 'medium',
-          due_date: input.due_date ?? null,
+          due_date: sanitized.due_date ?? null,
           completed_at: input.is_completed ? t : null,
           subtasks: input.subtasks ?? [],
           created_at: t,
@@ -344,21 +444,23 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
 
     async updateTask(id, input) {
       const now = new Date().toISOString();
+      const sanitized = sanitizeTaskPayload(input);
       try {
         const { data, error } = await sb
           .from('track_tasks')
-          .update({ ...input, updated_at: now })
+          .update({ ...sanitized, updated_at: now })
           .eq('id', id)
           .select()
           .single();
         if (error) throw error;
         return data as TrackTask;
-      } catch {
+      } catch (err) {
+        console.warn('[updateTask] Supabase update error, falling back:', err);
         const raw = localStorage.getItem('ta.tasks.fallback');
         const list: TrackTask[] = raw ? JSON.parse(raw) : [];
         const item = list.find((t) => t.id === id);
         if (!item) throw new AppError('Task not found');
-        Object.assign(item, input, { updated_at: now });
+        Object.assign(item, sanitized, { updated_at: now });
         localStorage.setItem('ta.tasks.fallback', JSON.stringify(list));
         return item;
       }
@@ -424,7 +526,9 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
       try {
         const { error } = await sb.from('track_tasks').delete().eq('id', id);
         if (error) throw error;
-      } catch {
+      } catch (err) {
+        console.warn('[deleteTask] Remote delete failed:', err);
+      } finally {
         const raw = localStorage.getItem('ta.tasks.fallback');
         if (raw) {
           const list: TrackTask[] = JSON.parse(raw);
