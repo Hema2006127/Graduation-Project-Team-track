@@ -74,6 +74,24 @@ export interface AppSettings {
   updated_at: string;
 }
 
+export type TaskPriority = 'low' | 'medium' | 'high';
+
+export interface TrackTask {
+  id: string;
+  title: string;
+  description: string | null;
+  specialization_id: string;
+  week_number: number;
+  assigned_member_id: string | null;
+  assigned_member_name?: string | null;
+  is_completed: boolean;
+  priority: TaskPriority;
+  due_date: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---- Inputs ---------------------------------------------------------------
 export type MemberInput = Pick<
   TeamMember,
@@ -90,3 +108,16 @@ export interface AttendanceEntry {
   notes: string | null;
 }
 export type SettingsInput = Pick<AppSettings, 'organization_name' | 'timezone' | 'low_attendance_threshold'>;
+
+export interface TrackTaskInput {
+  title: string;
+  description?: string | null;
+  specialization_id: string;
+  week_number: number;
+  assigned_member_id?: string | null;
+  assigned_member_name?: string | null;
+  is_completed?: boolean;
+  priority?: TaskPriority;
+  due_date?: string | null;
+}
+

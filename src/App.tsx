@@ -15,6 +15,8 @@ import { MemberDetailPage } from '@/pages/staff/MemberDetailPage';
 import { MembersPage } from '@/pages/admin/MembersPage';
 import { SpecializationsPage } from '@/pages/admin/SpecializationsPage';
 import { SettingsPage } from '@/pages/admin/SettingsPage';
+import { TasksPage } from '@/pages/TasksPage';
+
 
 function RouteError() {
   const error = useRouteError();
@@ -56,6 +58,7 @@ const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: <DashboardPage /> },
+          { path: 'tasks', element: <TasksPage /> },
           { path: 'sessions', element: <SessionsPage /> },
           { path: 'members', element: <MembersPage /> },
           { path: 'members/:id', element: <MemberDetailPage /> },
@@ -65,6 +68,7 @@ const router = createBrowserRouter([
       },
       area('/admin', ['admin'], [
         { index: true, element: <DashboardPage /> },
+        { path: 'tasks', element: <TasksPage /> },
         { path: 'members', element: <MembersPage /> },
         { path: 'members/:id', element: <MemberDetailPage /> },
         { path: 'specializations', element: <SpecializationsPage /> },
@@ -77,6 +81,7 @@ const router = createBrowserRouter([
       ]),
       area('/doctor', ['doctor'], [
         { index: true, element: <DashboardPage /> },
+        { path: 'tasks', element: <TasksPage /> },
         { path: 'sessions', element: <SessionsPage /> },
         { path: 'sessions/:id', element: <TakeAttendancePage /> },
         { path: 'take-attendance', element: <TakeAttendanceIndexPage /> },
@@ -86,6 +91,7 @@ const router = createBrowserRouter([
         { path: 'profile', element: <ProfilePage /> },
       ]),
     ],
+
   },
 ]);
 

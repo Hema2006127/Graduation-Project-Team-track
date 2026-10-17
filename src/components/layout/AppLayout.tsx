@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
-  CalendarDays, ClipboardCheck, FileSpreadsheet, History, LayoutDashboard, LogIn, LogOut, Menu, Settings,
+  CalendarDays, CheckSquare, ClipboardCheck, FileSpreadsheet, History, LayoutDashboard, LogIn, LogOut, Menu, Settings,
   Tags, UserCircle, Users, X, type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -22,6 +22,7 @@ interface NavItem {
 const NAV: Record<Viewer, NavItem[]> = {
   admin: [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/admin/tasks', label: 'Tasks & To-Do', icon: CheckSquare },
     { to: '/admin/members', label: 'Team Members', icon: Users },
     { to: '/admin/specializations', label: 'Specializations', icon: Tags },
     { to: '/admin/sessions', label: 'Sessions', icon: CalendarDays },
@@ -31,6 +32,7 @@ const NAV: Record<Viewer, NavItem[]> = {
   ],
   doctor: [
     { to: '/doctor', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/doctor/tasks', label: 'Tasks & To-Do', icon: CheckSquare },
     { to: '/doctor/sessions', label: 'Sessions', icon: CalendarDays },
     { to: '/doctor/take-attendance', label: 'Take Attendance', icon: ClipboardCheck },
     { to: '/doctor/attendance', label: 'Attendance History', icon: History },
@@ -39,11 +41,13 @@ const NAV: Record<Viewer, NavItem[]> = {
   // Visitors: read-only public site (no account needed)
   guest: [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/tasks', label: 'Tasks & To-Do', icon: CheckSquare },
     { to: '/sessions', label: 'Sessions', icon: CalendarDays },
     { to: '/members', label: 'Team Members', icon: Users },
   ],
   member: [],
 };
+
 
 function Sidebar({ role, onNavigate }: { role: Viewer; onNavigate?: () => void }) {
   const org = useSettings().data?.organization_name;

@@ -6,11 +6,14 @@
  */
 import type {
   AppSettings, AttendanceRecord, MemberInput, Profile, Role, Session, Specialization, TeamMember,
+  TrackTask,
 } from '@/types';
+
 import { addDays, hhmm, nowKey, todayIn } from '@/lib/dates';
 import { AppError, type Api } from '../api';
 import {
   SEED_ACCOUNTS, SEED_ATTENDANCE, SEED_MEMBERS, SEED_PASSWORDS, SEED_SESSIONS, SEED_SETTINGS, SEED_SPECIALIZATIONS,
+  SEED_TASKS,
 } from './seedData';
 
 const DB_KEY = 'ta.demo.db.v2';
@@ -26,7 +29,9 @@ interface DemoDb {
   accounts: DemoAccount[];
   sessions: Session[];
   attendance: AttendanceRecord[];
+  tasks: TrackTask[];
 }
+
 
 const now = () => new Date().toISOString();
 const uid = () => crypto.randomUUID();
@@ -56,7 +61,28 @@ export function buildSeedDb(): DemoDb {
       cancelled_at: s.cancelled ? created : null, created_by: SEED_ACCOUNTS[0].id, created_at: created, updated_at: created,
     })),
     attendance: [],
+    tasks: [],
   };
+
+  db.tasks = SEED_TASKS.map((t) => {
+    const member = db.members.find((m) => m.id === t.assigned_member_id);
+    return {
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      specialization_id: t.specialization_id,
+      week_number: t.week_number,
+      assigned_member_id: t.assigned_member_id,
+      assigned_member_name: member?.full_name ?? null,
+      is_completed: t.is_completed,
+      priority: t.priority,
+      due_date: t.due_date,
+      completed_at: t.is_completed ? created : null,
+      created_at: created,
+      updated_at: created,
+    };
+  });
+
   // Roster = members active at the time of each session (mirrors seed.sql).
   const marks = new Map(SEED_ATTENDANCE.map((a) => [`${a.session_id}|${a.team_member_id}`, a]));
   for (const s of db.sessions) {
@@ -76,7 +102,13 @@ export function createDemoApi(storage: Storage = localStorage): Api {
   let db: DemoDb = (() => {
     try {
       const raw = storage.getItem(DB_KEY);
-      if (raw) return JSON.parse(raw) as DemoDb;
+      if (raw) {
+        const parsed = JSON.parse(raw) as DemoDb;
+        if (!parsed.tasks || !Array.isArray(parsed.tasks)) {
+          parsed.tasks = buildSeedDb().tasks;
+        }
+        return parsed;
+      }
     } catch {
       /* corrupted -> reseed */
     }
@@ -89,6 +121,7 @@ export function createDemoApi(storage: Storage = localStorage): Api {
 
   const currentUserId = () => sessionStorage.getItem(USER_KEY) ?? storage.getItem(USER_KEY);
   const me = () => db.accounts.find((a) => a.id === currentUserId()) ?? null;
+
   const requireUser = () => {
     const u = me();
     if (!u) throw new AppError('Your session has expired. Please sign in again.', '401');
@@ -380,9 +413,95 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         }
         return out;
       }),
+
+    // tasks
+    listTasks: (filter) =>
+      read(() => {
+        let list = [...(db.tasks ?? [])];
+        if (filter?.specializationId) {
+          list = list.filter((t) => t.specialization_id === filter.specializationId);
+        }
+        if (filter?.weekNumber) {
+          list = list.filter((t) => t.week_number === filter.weekNumber);
+        }
+        return list.sort((a, b) => {
+          if (a.week_number !== b.week_number) return a.week_number - b.week_number;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+      }),
+
+    createTask: (input) =>
+      tx(() => {
+        const t = now();
+        const member = input.assigned_member_id ? db.members.find((m) => m.id === input.assigned_member_id) : null;
+        const task: TrackTask = {
+          id: uid(),
+          title: input.title.trim(),
+          description: input.description?.trim() || null,
+          specialization_id: input.specialization_id,
+          week_number: Number(input.week_number) || 1,
+          assigned_member_id: input.assigned_member_id || null,
+          assigned_member_name: member?.full_name ?? input.assigned_member_name ?? null,
+          is_completed: Boolean(input.is_completed),
+          priority: input.priority ?? 'medium',
+          due_date: input.due_date || null,
+          completed_at: input.is_completed ? t : null,
+          created_at: t,
+          updated_at: t,
+        };
+        if (!db.tasks) db.tasks = [];
+        db.tasks.push(task);
+        return task;
+      }),
+
+    updateTask: (id, input) =>
+      tx(() => {
+        if (!db.tasks) db.tasks = [];
+        const task = find(db.tasks, id, 'Task');
+        const t = now();
+        const member =
+          input.assigned_member_id !== undefined
+            ? (input.assigned_member_id ? db.members.find((m) => m.id === input.assigned_member_id) : null)
+            : undefined;
+
+        if (input.title !== undefined) task.title = input.title.trim();
+        if (input.description !== undefined) task.description = input.description?.trim() || null;
+        if (input.specialization_id !== undefined) task.specialization_id = input.specialization_id;
+        if (input.week_number !== undefined) task.week_number = Number(input.week_number) || 1;
+        if (input.assigned_member_id !== undefined) {
+          task.assigned_member_id = input.assigned_member_id || null;
+          task.assigned_member_name = member?.full_name ?? input.assigned_member_name ?? null;
+        }
+        if (input.priority !== undefined) task.priority = input.priority;
+        if (input.due_date !== undefined) task.due_date = input.due_date || null;
+        if (input.is_completed !== undefined) {
+          task.is_completed = input.is_completed;
+          task.completed_at = input.is_completed ? (task.completed_at || t) : null;
+        }
+        task.updated_at = t;
+        return task;
+      }),
+
+    toggleTaskCompleted: (id, is_completed) =>
+      tx(() => {
+        if (!db.tasks) db.tasks = [];
+        const task = find(db.tasks, id, 'Task');
+        const t = now();
+        task.is_completed = is_completed;
+        task.completed_at = is_completed ? t : null;
+        task.updated_at = t;
+        return task;
+      }),
+
+    deleteTask: (id) =>
+      tx(() => {
+        if (!db.tasks) db.tasks = [];
+        db.tasks = db.tasks.filter((t) => t.id !== id);
+      }),
   };
   return api;
 }
+
 
 export function resetDemoData(storage: Storage = localStorage) {
   storage.removeItem(DB_KEY);

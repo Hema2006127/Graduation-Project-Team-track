@@ -14,6 +14,7 @@ export const qk = {
   profiles: ['profiles'] as const,
   sessions: ['sessions'] as const,
   attendance: ['attendance'] as const,
+  tasks: ['tasks'] as const,
 };
 
 export const useSettings = () => useQuery({ queryKey: qk.settings, queryFn: api.getSettings });
@@ -23,6 +24,12 @@ export const useProfiles = () => useQuery({ queryKey: qk.profiles, queryFn: api.
 export const useSessions = () => useQuery({ queryKey: qk.sessions, queryFn: api.listSessions });
 /** All attendance the current user may see (RLS limits members to their own). */
 export const useAttendance = () => useQuery({ queryKey: qk.attendance, queryFn: () => api.listAttendance() });
+export const useTasks = (filter?: { specializationId?: string; weekNumber?: number }) =>
+  useQuery({
+    queryKey: [...qk.tasks, filter?.specializationId ?? 'all', filter?.weekNumber ?? 'all'],
+    queryFn: () => api.listTasks(filter),
+  });
+
 
 /** Wall-clock "now" in the team timezone, refreshed every 30 s so phases update live. */
 export function useNowKey() {

@@ -1,6 +1,6 @@
 import type {
   AppSettings, AttendanceEntry, AttendanceRecord, MemberInput, Profile, Session, SessionInput,
-  SettingsInput, Specialization, SpecializationInput, TeamMember,
+  SettingsInput, Specialization, SpecializationInput, TeamMember, TrackTask, TrackTaskInput,
 } from '@/types';
 
 /** Error with a user-friendly message. */
@@ -65,4 +65,12 @@ export interface Api {
   listAttendance(filter?: { sessionId?: string; memberId?: string }): Promise<AttendanceRecord[]>;
   /** Upserts one record per member (unique on session + member). */
   saveAttendance(sessionId: string, entries: AttendanceEntry[]): Promise<AttendanceRecord[]>;
+
+  // tasks
+  listTasks(filter?: { specializationId?: string; weekNumber?: number }): Promise<TrackTask[]>;
+  createTask(input: TrackTaskInput): Promise<TrackTask>;
+  updateTask(id: string, input: Partial<TrackTaskInput>): Promise<TrackTask>;
+  toggleTaskCompleted(id: string, is_completed: boolean): Promise<TrackTask>;
+  deleteTask(id: string): Promise<void>;
 }
+

@@ -1,6 +1,8 @@
 import { createClient, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js';
-import type { AttendanceRecord, Profile, Session, TeamMember } from '@/types';
+import type { AttendanceRecord, Profile, Session, TeamMember, TrackTask } from '@/types';
 import { AppError, type Api } from './api';
+
+
 
 const REMEMBER_KEY = 'ta.remember';
 
@@ -197,6 +199,105 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
       if (error) fail(error);
       return data as AttendanceRecord[];
     },
+
+    // tasks
+    async listTasks(filter = {}) {
+      try {
+        let q = sb.from('track_tasks').select('*').order('week_number').order('created_at', { ascending: false });
+        if (filter.specializationId) q = q.eq('specialization_id', filter.specializationId);
+        if (filter.weekNumber) q = q.eq('week_number', filter.weekNumber);
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data ?? []) as TrackTask[];
+      } catch {
+        // Fallback to local storage if remote table is not configured yet
+        const raw = localStorage.getItem('ta.tasks.fallback');
+        let list: TrackTask[] = raw ? JSON.parse(raw) : [];
+        if (filter.specializationId) list = list.filter((t) => t.specialization_id === filter.specializationId);
+        if (filter.weekNumber) list = list.filter((t) => t.week_number === filter.weekNumber);
+        return list;
+      }
+    },
+    async createTask(input) {
+      try {
+        const { data, error } = await sb.from('track_tasks').insert(input).select().single();
+        if (error) throw error;
+        return data as TrackTask;
+      } catch {
+        const raw = localStorage.getItem('ta.tasks.fallback');
+        const list: TrackTask[] = raw ? JSON.parse(raw) : [];
+        const t = new Date().toISOString();
+        const newTask: TrackTask = {
+          id: crypto.randomUUID(),
+          title: input.title,
+          description: input.description ?? null,
+          specialization_id: input.specialization_id,
+          week_number: input.week_number,
+          assigned_member_id: input.assigned_member_id ?? null,
+          assigned_member_name: input.assigned_member_name ?? null,
+          is_completed: Boolean(input.is_completed),
+          priority: input.priority ?? 'medium',
+          due_date: input.due_date ?? null,
+          completed_at: input.is_completed ? t : null,
+          created_at: t,
+          updated_at: t,
+        };
+        list.push(newTask);
+        localStorage.setItem('ta.tasks.fallback', JSON.stringify(list));
+        return newTask;
+      }
+    },
+    async updateTask(id, input) {
+      const now = new Date().toISOString();
+      try {
+        const { data, error } = await sb
+          .from('track_tasks')
+          .update({ ...input, updated_at: now })
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as TrackTask;
+      } catch {
+        const raw = localStorage.getItem('ta.tasks.fallback');
+        const list: TrackTask[] = raw ? JSON.parse(raw) : [];
+        const item = list.find((t) => t.id === id);
+        if (!item) throw new AppError('Task not found');
+        Object.assign(item, input, { updated_at: now });
+        localStorage.setItem('ta.tasks.fallback', JSON.stringify(list));
+        return item;
+      }
+    },
+    async toggleTaskCompleted(id, is_completed) {
+      const now = new Date().toISOString();
+      const patch = { is_completed, completed_at: is_completed ? now : null, updated_at: now };
+      try {
+        const { data, error } = await sb.from('track_tasks').update(patch).eq('id', id).select().single();
+        if (error) throw error;
+        return data as TrackTask;
+      } catch {
+        const raw = localStorage.getItem('ta.tasks.fallback');
+        const list: TrackTask[] = raw ? JSON.parse(raw) : [];
+        const item = list.find((t) => t.id === id);
+        if (!item) throw new AppError('Task not found');
+        Object.assign(item, patch);
+        localStorage.setItem('ta.tasks.fallback', JSON.stringify(list));
+        return item;
+      }
+    },
+    async deleteTask(id) {
+      try {
+        const { error } = await sb.from('track_tasks').delete().eq('id', id);
+        if (error) throw error;
+      } catch {
+        const raw = localStorage.getItem('ta.tasks.fallback');
+        if (raw) {
+          const list: TrackTask[] = JSON.parse(raw);
+          localStorage.setItem('ta.tasks.fallback', JSON.stringify(list.filter((t) => t.id !== id)));
+        }
+      }
+    },
   };
   return api;
 }
+

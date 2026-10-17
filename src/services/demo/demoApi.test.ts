@@ -130,4 +130,55 @@ describe('demo API mirrors database rules', () => {
     const admin = await login('admin@example.com', 'admin');
     await expect(api.updateProfile(admin.id, { role: 'doctor' })).rejects.toThrow(/at least one admin/);
   });
+
+  it('anyone can list, create, toggle, update, and delete weekly track tasks', async () => {
+    // 1. List initial seed tasks
+    const initialTasks = await api.listTasks();
+    expect(initialTasks.length).toBeGreaterThan(0);
+
+    const [specs] = await Promise.all([api.listSpecializations(), api.listMembers()]);
+    const frontend = specs.find((s) => s.name === 'Frontend')!;
+
+    // 2. Filter by track
+    const frontendTasks = await api.listTasks({ specializationId: frontend.id });
+    expect(frontendTasks.every((t) => t.specialization_id === frontend.id)).toBe(true);
+
+    // 3. Create a new weekly task
+    const created = await api.createTask({
+      title: 'Implement Dark Mode for Mobile',
+      description: 'Support OLED dark theme and system preference',
+      specialization_id: frontend.id,
+      week_number: 4,
+      priority: 'high',
+      due_date: '2026-10-25',
+    });
+    expect(created.id).toBeDefined();
+    expect(created.title).toBe('Implement Dark Mode for Mobile');
+    expect(created.is_completed).toBe(false);
+    expect(created.completed_at).toBeNull();
+
+    // 4. Toggle completion status ("يعلم عليه عملو ولا لا")
+    const toggled = await api.toggleTaskCompleted(created.id, true);
+    expect(toggled.is_completed).toBe(true);
+    expect(toggled.completed_at).not.toBeNull();
+
+    // Toggle back to false
+    const untoggled = await api.toggleTaskCompleted(created.id, false);
+    expect(untoggled.is_completed).toBe(false);
+    expect(untoggled.completed_at).toBeNull();
+
+    // 5. Update task
+    const updated = await api.updateTask(created.id, {
+      title: 'Implement Dark Mode & Theme Toggle',
+      priority: 'low',
+    });
+    expect(updated.title).toBe('Implement Dark Mode & Theme Toggle');
+    expect(updated.priority).toBe('low');
+
+    // 6. Delete task
+    await api.deleteTask(created.id);
+    const afterDelete = await api.listTasks({ specializationId: frontend.id });
+    expect(afterDelete.some((t) => t.id === created.id)).toBe(false);
+  });
 });
+

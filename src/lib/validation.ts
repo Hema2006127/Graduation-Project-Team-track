@@ -70,7 +70,24 @@ export const settingsSchema = z.object({
   low_attendance_threshold: z.coerce.number().min(0).max(100),
 });
 
+export const trackTaskSchema = z.object({
+  title: z.string().trim().min(2, 'Task title must be at least 2 characters').max(200),
+  description: optionalText(1000),
+  specialization_id: z.string().min(1, 'Please select a track'),
+  week_number: z.coerce.number().int().min(1, 'Week must be at least 1').max(52, 'Week must be at most 52'),
+  assigned_member_id: optionalText(100),
+  assigned_member_name: optionalText(100),
+  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  due_date: z
+    .string()
+    .trim()
+    .transform((v) => (v === '' ? null : v))
+    .nullable()
+    .refine((v) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Enter a valid date (YYYY-MM-DD)'),
+});
+
 export type FieldErrors = Record<string, string>;
+
 
 /** Validates and returns either parsed data or a flat field → message map. */
 export function validate<T extends z.ZodType>(

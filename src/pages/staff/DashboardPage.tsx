@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
-import { AlertTriangle, CalendarCheck2, CheckCircle2, ChevronRight, Clock, Percent, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarCheck2, CheckCircle2, CheckSquare, ChevronRight, Clock, Percent, Users, XCircle } from 'lucide-react';
 import { useViewer } from '@/context/AuthContext';
-import { useAttendanceData, useCan } from '@/hooks/queries';
+import { useAttendanceData, useCan, useTasks } from '@/hooks/queries';
 import { formatRate, memberStats, overview, rateBySpecialization, rateOverTime, rateTone, sortSessions } from '@/lib/attendance';
 import { formatDate, formatTimeRange, MONTHS } from '@/lib/dates';
 import { MemberRateChart, RateOverTimeChart, SpecializationChart, StatusDonut } from '@/components/charts/AttendanceCharts';
@@ -12,6 +12,11 @@ export function DashboardPage() {
   const { role, base, profile } = useViewer();
   const perms = useCan();
   const d = useAttendanceData();
+  const tasksQuery = useTasks();
+  const tasks = tasksQuery.data ?? [];
+  const tasksCompleted = tasks.filter((t) => t.is_completed).length;
+  const tasksRate = tasks.length > 0 ? Math.round((tasksCompleted / tasks.length) * 100) : 0;
+
 
   const derived = useMemo(() => {
     if (!d.index) return null;
@@ -59,6 +64,27 @@ export function DashboardPage() {
             <StatCard label="Total Late" value={derived.ov.late} icon={<Clock className="size-5" />} tone="amber" hint={`${derived.ov.excused} excused`} />
             <StatCard label="Average Attendance" value={formatRate(derived.ov.rate)} icon={<Percent className="size-5" />} tone="blue" hint="(Present + Late) ÷ counted" />
           </div>
+
+          <div className="card flex flex-col gap-4 border-blue-200 bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white p-4 sm:flex-row sm:items-center sm:justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-xs">
+                <CheckSquare className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-ink text-sm">Weekly Track Tasks & To-Do · مهام التراكات الأسبوعية</p>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  {tasksCompleted} of {tasks.length} tasks completed ({tasksRate}%) across graduation project tracks.
+                </p>
+              </div>
+            </div>
+            <Link
+              to={role === 'guest' ? '/tasks' : `${base}/tasks`}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-primary-dark transition-colors self-start sm:self-auto"
+            >
+              Open Tasks & To-Do <ChevronRight className="size-3.5" />
+            </Link>
+          </div>
+
 
           {perms.recordAttendance && derived.pendingSessions.length > 0 && (
             <div className="card flex flex-col gap-3 border-amber-200 bg-amber-50/60 p-4 sm:flex-row sm:items-center">
