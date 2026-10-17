@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent, useEffect } from 'react';
 import {
-  Calendar, CalendarCheck2, Check, CheckCircle2, CheckSquare, ChevronDown, ChevronUp, Clock, Cpu,
+  AlertCircle, Calendar, CalendarCheck2, Check, CheckCircle2, CheckSquare, ChevronDown, ChevronUp, Clock, Cpu,
   Database, FileText, Layers, Layout, ListChecks, ListPlus, MapPin, Palette, Pencil, Plus,
   RotateCcw, Server, Shield, Smartphone, Sparkles, Trash2, User, UserCheck
 } from 'lucide-react';
@@ -14,6 +14,7 @@ import { Avatar, Badge, EmptyState, ErrorState, PageHeader, Skeleton, StatCard }
 import { Button, IconButton } from '@/components/ui/Button';
 import { SearchInput, SelectField, TextAreaField, TextField } from '@/components/ui/Form';
 import { Modal, useConfirm } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/dates';
 
 /** Helper to get track icon */
@@ -63,6 +64,7 @@ function TaskModal({
   sessions,
   members,
 }: TaskModalProps) {
+  const toast = useToast();
   const [form, setForm] = useState<TrackTaskInput>({
     title: '',
     description: '',
@@ -101,7 +103,8 @@ function TaskModal({
       } else {
         const initialSessionId = defaultSessionId || (sessions[0]?.id ?? '');
         const matchedSession = sessions.find((s) => s.id === initialSessionId);
-        const initialSpecId = defaultSpecializationId || (specializations[0]?.id ?? '');
+        const validSpec = specializations.some((s) => s.id === defaultSpecializationId);
+        const initialSpecId = (validSpec ? defaultSpecializationId : '') || (specializations[0]?.id ?? '');
         setForm({
           title: '',
           description: '',
@@ -165,21 +168,31 @@ function TaskModal({
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const v = validate(trackTaskSchema, {
-      ...form,
-      session_id: form.session_id || null,
-      session_title: form.session_title || null,
-      assigned_member_id: form.assigned_member_id || null,
-      due_date: form.due_date || null,
-      description: form.description || null,
-      subtasks: subtasks.map((st) => ({
+    const cleanSubtasks = subtasks
+      .map((st) => ({
         id: st.id,
         title: st.title.trim(),
         is_completed: Boolean(st.is_completed),
-      })),
+      }))
+      .filter((st) => st.title.length > 0);
+
+    const v = validate(trackTaskSchema, {
+      ...form,
+      title: form.title.trim(),
+      session_id: form.session_id || null,
+      session_title: form.session_title || null,
+      assigned_member_id: form.assigned_member_id || null,
+      assigned_member_name: null,
+      due_date: form.due_date || null,
+      description: form.description || null,
+      subtasks: cleanSubtasks,
     });
     if (v.errors) {
       setErrors(v.errors);
+      const modalBody = document.getElementById('task-form')?.parentElement;
+      if (modalBody) modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+      const firstErrorMessage = Object.values(v.errors)[0];
+      toast.error('يرجى مراجعة البيانات', firstErrorMessage || 'تأكد من كتابة عنوان المهمة واختيار التراك والسيشن');
       return;
     }
 
@@ -189,7 +202,7 @@ function TaskModal({
     saveMutation.mutate(
       {
         ...v.data,
-        subtasks,
+        subtasks: cleanSubtasks,
         session_title: sessionObj?.title ?? v.data.session_title ?? null,
         assigned_member_name: assigned?.full_name ?? null,
       },
@@ -235,14 +248,22 @@ function TaskModal({
             <Button variant="secondary" type="button" onClick={onClose}>
               إلغاء
             </Button>
-            <Button loading={saveMutation.isPending} type="submit" form="task-form">
+            <Button
+              loading={saveMutation.isPending}
+              type="submit"
+              form="task-form"
+              onClick={() => {
+                const formEl = document.getElementById('task-form') as HTMLFormElement | null;
+                if (formEl) formEl.requestSubmit();
+              }}
+            >
               {task ? 'حفظ التعديلات' : 'إنشاء المهمة'}
             </Button>
           </div>
         </div>
       }
     >
-      <form id="task-form" onSubmit={submit} className="space-y-4">
+      <form id="task-form" onSubmit={submit} noValidate className="space-y-4">
         {selectedSpecObj && (
           <div className="flex items-center gap-2 rounded-xl bg-blue-50/80 px-3.5 py-2.5 text-xs text-blue-900 border border-blue-200/80">
             <Sparkles className="size-4 shrink-0 text-blue-600" />
@@ -470,6 +491,15 @@ function TaskModal({
           error={errors.description}
           placeholder="روابط Figma، مخرجات مطلوبة، مراجع برمجية..."
         />
+
+        {Object.keys(errors).length > 0 && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0 text-red-600" />
+            <span>
+              يرجى استكمال الحقول المطلوبة: {Object.values(errors).join(' · ')}
+            </span>
+          </div>
+        )}
       </form>
     </Modal>
   );
@@ -1792,7 +1822,9 @@ export function TasksPage() {
         onClose={() => setModalOpen(false)}
         task={editingTask}
         defaultSpecializationId={
-          selectedTrackId !== 'all' ? selectedTrackId : registeredSpecialization?.id
+          selectedTrackId !== 'all' && selectedTrackId !== 'my_tracks'
+            ? selectedTrackId
+            : registeredSpecialization?.id ?? specializations[0]?.id
         }
         defaultSessionId={activeSessionForModal ?? (selectedSessionId !== 'all' ? selectedSessionId : undefined)}
         defaultMemberId={registeredMember?.id}

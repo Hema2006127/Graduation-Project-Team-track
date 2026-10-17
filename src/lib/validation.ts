@@ -10,7 +10,9 @@ const optionalText = (max: number) =>
     .trim()
     .max(max, `Must be at most ${max} characters`)
     .transform((v) => (v === '' ? null : v))
-    .nullable();
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null);
 
 const email = z.string().trim().toLowerCase().regex(EMAIL_RE, 'Enter a valid email address');
 
@@ -86,17 +88,20 @@ export const trackTaskSchema = z.object({
     .trim()
     .transform((v) => (v === '' ? null : v))
     .nullable()
+    .optional()
+    .transform((v) => v ?? null)
     .refine((v) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Enter a valid date (YYYY-MM-DD)'),
   subtasks: z
     .array(
       z.object({
         id: z.string(),
-        title: z.string().trim().min(1),
-        is_completed: z.boolean(),
+        title: z.string().trim().min(1, 'Subtask title cannot be empty'),
+        is_completed: z.boolean().default(false),
         completed_at: z.string().nullable().optional(),
       }),
     )
-    .optional(),
+    .optional()
+    .default([]),
 });
 
 
