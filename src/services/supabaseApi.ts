@@ -22,7 +22,7 @@ const authStorage = {
 
 /** Columns anonymous visitors may read (see migration 20260927000003_public_read.sql). */
 const PUBLIC_COLUMNS = {
-  team_members: 'id,member_code,full_name,avatar_url,specialization_id,status,created_at,updated_at',
+  team_members: 'id,member_code,full_name,avatar_url,specialization_id,specialization_ids,status,created_at,updated_at',
   attendance: 'id,session_id,team_member_id,status,recorded_at,created_at,updated_at',
   profiles: 'id,full_name,role',
 };

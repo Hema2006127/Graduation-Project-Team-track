@@ -80,33 +80,39 @@ export function SearchInput({
   value,
   onChange,
   placeholder = 'Search…',
+  label,
   className,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  label?: string;
   className?: string;
 }) {
   return (
-    <div className={clsx('relative', className)}>
-      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        className="input pr-8 pl-9 [&::-webkit-search-cancel-button]:hidden"
-      />
-      {value && (
-        <button
-          onClick={() => onChange('')}
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600"
-          aria-label="Clear search"
-        >
-          <X className="size-3.5" />
-        </button>
-      )}
+    <div className={className}>
+      {label && <label className="block text-xs font-semibold text-slate-700 mb-1">{label}</label>}
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 start-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={label || placeholder}
+          className="input ps-9 pe-8 w-full h-10 text-xs [&::-webkit-search-cancel-button]:hidden"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="absolute top-1/2 end-2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+            aria-label="Clear search"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

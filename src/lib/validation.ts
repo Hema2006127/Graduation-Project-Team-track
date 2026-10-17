@@ -32,6 +32,7 @@ export const memberSchema = z.object({
   // data: URLs are only produced by demo-mode uploads; the database accepts http(s) URLs.
   avatar_url: optionalText(200000).refine((v) => v === null || /^(https?:\/\/|data:image\/)/i.test(v), 'Must be an image URL'),
   specialization_id: z.string().min(1, 'Choose a specialization'),
+  specialization_ids: z.array(z.string()).optional(),
   status: z.enum(['active', 'inactive']),
 });
 

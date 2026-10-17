@@ -38,8 +38,16 @@ export function MembersPage() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return d.members
-      .filter((m) => (!spec || m.specialization_id === spec) && (!status || m.status === status))
-      .filter((m) => !q || [m.full_name, m.member_code, m.email, d.lookup.specName(m.specialization_id)].some((f) => f.toLowerCase().includes(q)))
+      .filter(
+        (m) =>
+          (!spec || m.specialization_id === spec || (m.specialization_ids && m.specialization_ids.includes(spec))) &&
+          (!status || m.status === status),
+      )
+      .filter((m) => {
+        if (!q) return true;
+        const tracks = (m.specialization_ids && m.specialization_ids.length > 0 ? m.specialization_ids : [m.specialization_id]).map((id) => d.lookup.specName(id));
+        return [m.full_name, m.member_code, m.email, ...tracks].some((f) => f.toLowerCase().includes(q));
+      })
       .map((m) => ({ m, stats: d.index ? memberStats(d.index, m.id) : null }));
   }, [d.members, d.index, d.lookup, search, spec, status]);
 
@@ -149,7 +157,12 @@ export function MembersPage() {
                     <Link to={`${base}/members/${m.id}`} className="block truncate font-semibold text-ink hover:text-primary">
                       {m.full_name}
                     </Link>
-                    <p className="truncate text-sm text-slate-500">{d.lookup.specName(m.specialization_id)}</p>
+                    <p className="truncate text-sm text-slate-500">
+                      {(m.specialization_ids && m.specialization_ids.length > 0 ? m.specialization_ids : [m.specialization_id])
+                        .map((id) => d.lookup.specName(id))
+                        .filter(Boolean)
+                        .join(' · ') || '—'}
+                    </p>
                   </div>
                   <MemberStatusBadge status={m.status} />
                 </div>
@@ -189,7 +202,12 @@ export function MembersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="text-slate-600">{d.lookup.specName(m.specialization_id)}</td>
+                      <td className="text-slate-600">
+                        {(m.specialization_ids && m.specialization_ids.length > 0 ? m.specialization_ids : [m.specialization_id])
+                          .map((id) => d.lookup.specName(id))
+                          .filter(Boolean)
+                          .join(' · ') || '—'}
+                      </td>
                       <td className="font-mono text-xs text-slate-600">{m.member_code}</td>
                       <td>
                         <MemberStatusBadge status={m.status} />

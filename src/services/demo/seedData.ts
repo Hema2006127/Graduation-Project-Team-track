@@ -26,29 +26,30 @@ export const SEED_SPECIALIZATIONS = [
 const spec = (name: string) => SEED_SPECIALIZATIONS.find((s) => s.name === name)!.id;
 
 /** reliability = probability of being present on time */
-const MEMBER_ROWS: [string, string, string, number][] = [
-  ['Ahmed Mohamed', 'ahmed', 'AI / Machine Learning', 0.93],
-  ['Hema Mohamed', 'hema', 'Flutter', 0.86],
-  ['Sara Ali', 'sara', 'UI/UX', 0.9],
-  ['Mohamed Hassan', 'mohamed', 'Backend', 0.74],
-  ['Nour El-Din', 'nour', 'Frontend', 0.88],
-  ['Mariam Khaled', 'mariam', 'Database', 0.95],
-  ['Omar Farouk', 'omar', 'Cyber Security', 0.42],
-  ['Yasmin Adel', 'yasmin', 'Documentation', 0.9],
-  ['Youssef Ibrahim', 'youssef', 'Testing', 0.8],
-  ['Laila Mostafa', 'laila', 'AI / Machine Learning', 0.84],
-  ['Karim Samir', 'karim', 'Backend', 0.5],
-  ['Salma Tarek', 'salma', 'Frontend', 0.92],
-  ['Hassan Nabil', 'hassan', 'Flutter', 0.78], // becomes inactive (left the team)
+const MEMBER_ROWS: [string, string, string[], number][] = [
+  ['Ahmed Mohamed', 'ahmed', ['AI / Machine Learning', 'Backend'], 0.93],
+  ['Hema Mohamed', 'hema', ['Flutter', 'Frontend'], 0.86],
+  ['Sara Ali', 'sara', ['UI/UX', 'Frontend'], 0.9],
+  ['Mohamed Hassan', 'mohamed', ['Backend', 'Database'], 0.74],
+  ['Nour El-Din', 'nour', ['Frontend', 'UI/UX'], 0.88],
+  ['Mariam Khaled', 'mariam', ['Database', 'Backend'], 0.95],
+  ['Omar Farouk', 'omar', ['Cyber Security', 'Backend'], 0.42],
+  ['Yasmin Adel', 'yasmin', ['Documentation', 'Testing'], 0.9],
+  ['Youssef Ibrahim', 'youssef', ['Testing', 'Documentation'], 0.8],
+  ['Laila Mostafa', 'laila', ['AI / Machine Learning', 'Testing'], 0.84],
+  ['Karim Samir', 'karim', ['Backend', 'Cyber Security'], 0.5],
+  ['Salma Tarek', 'salma', ['Frontend', 'Flutter'], 0.92],
+  ['Hassan Nabil', 'hassan', ['Flutter'], 0.78], // becomes inactive (left the team)
 ];
 
-export const SEED_MEMBERS = MEMBER_ROWS.map(([full_name, handle, specName, reliability], i) => ({
+export const SEED_MEMBERS = MEMBER_ROWS.map(([full_name, handle, specNames, reliability], i) => ({
   id: uuid('b1', i + 1),
   member_code: `TM${String(i + 1).padStart(3, '0')}`,
   full_name,
   email: `${handle}@example.com`,
   phone: `+20 10${String(1234567 + i * 7919).slice(0, 7)}${i % 10}`,
-  specialization_id: spec(specName),
+  specialization_id: spec(specNames[0]),
+  specialization_ids: specNames.map(spec),
   reliability,
   finalStatus: (i === 12 ? 'inactive' : 'active') as 'active' | 'inactive',
 }));

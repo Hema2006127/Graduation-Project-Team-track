@@ -199,10 +199,23 @@ function TaskModal({
     );
   }
 
-  // Filter members by selected track
-  const trackMembers = useMemo(() => {
+  // Filter members by selected track (matches primary or secondary tracks)
+  const matchingTrackMembers = useMemo(() => {
     if (!form.specialization_id) return members;
-    return members.filter((m) => m.specialization_id === form.specialization_id);
+    return members.filter(
+      (m) =>
+        m.specialization_id === form.specialization_id ||
+        (m.specialization_ids && m.specialization_ids.includes(form.specialization_id)),
+    );
+  }, [members, form.specialization_id]);
+
+  const otherMembers = useMemo(() => {
+    if (!form.specialization_id) return [];
+    return members.filter(
+      (m) =>
+        m.specialization_id !== form.specialization_id &&
+        !(m.specialization_ids && m.specialization_ids.includes(form.specialization_id)),
+    );
   }, [members, form.specialization_id]);
 
   const selectedSpecObj = specializations.find((s) => s.id === form.specialization_id);
@@ -386,11 +399,36 @@ function TaskModal({
             error={errors.assigned_member_id}
           >
             <option value="">الفريق بأكمله (Whole Team)</option>
-            {trackMembers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.full_name} ({m.member_code})
-              </option>
-            ))}
+            {matchingTrackMembers.length > 0 && (
+              <optgroup label={`أعضاء تراك ${selectedSpecObj?.name ?? 'المحدد'}`}>
+                {matchingTrackMembers.map((m) => {
+                  const trackNames = (m.specialization_ids && m.specialization_ids.length > 0 ? m.specialization_ids : [m.specialization_id])
+                    .map((id) => specializations.find((s) => s.id === id)?.name)
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                    <option key={m.id} value={m.id}>
+                      {m.full_name} ({trackNames || m.member_code})
+                    </option>
+                  );
+                })}
+              </optgroup>
+            )}
+            {otherMembers.length > 0 && (
+              <optgroup label="باقي أعضاء الفريق">
+                {otherMembers.map((m) => {
+                  const trackNames = (m.specialization_ids && m.specialization_ids.length > 0 ? m.specialization_ids : [m.specialization_id])
+                    .map((id) => specializations.find((s) => s.id === id)?.name)
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                    <option key={m.id} value={m.id}>
+                      {m.full_name} ({trackNames || m.member_code})
+                    </option>
+                  );
+                })}
+              </optgroup>
+            )}
           </SelectField>
 
           {/* Week number */}
@@ -775,22 +813,33 @@ export function TasksPage() {
     return members[0] ?? null;
   }, [profile, members, activeMemberId]);
 
-  // Read the specialization responsible from the registered member
-  const registeredSpecialization = useMemo(() => {
-    if (!registeredMember?.specialization_id) return null;
-    return specializations.find((s) => s.id === registeredMember.specialization_id) ?? null;
-  }, [registeredMember, specializations]);
+  // Read all specializations responsible from the registered member
+  const registeredSpecializationIds = useMemo(() => {
+    if (!registeredMember) return [];
+    if (registeredMember.specialization_ids && registeredMember.specialization_ids.length > 0) {
+      return registeredMember.specialization_ids;
+    }
+    return registeredMember.specialization_id ? [registeredMember.specialization_id] : [];
+  }, [registeredMember]);
 
-  // Track filter: defaults to the registered member's track
+  const registeredSpecializations = useMemo(() => {
+    return registeredSpecializationIds
+      .map((id) => specializations.find((s) => s.id === id))
+      .filter((s): s is Specialization => Boolean(s));
+  }, [registeredSpecializationIds, specializations]);
+
+  const registeredSpecialization = registeredSpecializations[0] ?? null;
+
+  // Track filter: defaults to the registered member's track or all their tracks
   const [selectedTrackId, setSelectedTrackId] = useState<string>('all');
   const [initializedTrack, setInitializedTrack] = useState(false);
 
   useEffect(() => {
-    if (!initializedTrack && registeredSpecialization?.id) {
-      setSelectedTrackId(registeredSpecialization.id);
+    if (!initializedTrack && registeredSpecializations.length > 0) {
+      setSelectedTrackId(registeredSpecializations.length > 1 ? 'my_tracks' : registeredSpecializations[0].id);
       setInitializedTrack(true);
     }
-  }, [initializedTrack, registeredSpecialization]);
+  }, [initializedTrack, registeredSpecializations]);
 
   const [selectedSessionId, setSelectedSessionId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
@@ -865,7 +914,9 @@ export function TasksPage() {
   const filteredTasks = useMemo(() => {
     let list = allTasks;
 
-    if (selectedTrackId !== 'all') {
+    if (selectedTrackId === 'my_tracks') {
+      list = list.filter((t) => registeredSpecializationIds.includes(t.specialization_id));
+    } else if (selectedTrackId !== 'all') {
       list = list.filter((t) => t.specialization_id === selectedTrackId);
     }
     if (selectedSessionId !== 'all') {
@@ -1242,32 +1293,68 @@ export function TasksPage() {
                   <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold backdrop-blur-xs">
                     <UserCheck className="size-3" /> {registeredMember.member_code}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 text-slate-900 px-2.5 py-0.5 text-xs font-bold shadow-xs">
-                    تخصصك: {registeredSpecialization.name}
-                  </span>
+                  {registeredSpecializations.map((spec) => (
+                    <span key={spec.id} className="inline-flex items-center gap-1 rounded-full bg-amber-400 text-slate-900 px-2.5 py-0.5 text-xs font-bold shadow-xs">
+                      {spec.name}
+                    </span>
+                  ))}
                 </div>
                 <p className="mt-1 text-xs text-blue-100 flex items-center gap-1.5">
                   <Sparkles className="size-3.5 text-yellow-300" />
                   <span>
-                    تم قراءة التراك المسؤول عنه من تخصصك تلقائياً ({registeredSpecialization.name}) وضبط العرض والتاسكات عليه.
+                    تم قراءة {registeredSpecializations.length > 1 ? 'التراكات المسؤولة' : 'التراك المسؤول'} من تخصصك تلقائياً ({registeredSpecializations.map((s) => s.name).join(' · ')}) وضبط العرض والتاسكات عليها.
                   </span>
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedTrackId(registeredSpecialization.id)}
-                className={clsx(
-                  'rounded-xl px-3 py-1.5 text-xs font-bold transition-all shadow-xs cursor-pointer',
-                  selectedTrackId === registeredSpecialization.id
-                    ? 'bg-white text-primary'
-                    : 'bg-white/20 text-white hover:bg-white/30',
-                )}
-              >
-                ⭐ عرض تاسكات تخصصي فقط
-              </button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {registeredSpecializations.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTrackId('my_tracks')}
+                    className={clsx(
+                      'rounded-xl px-3 py-1.5 text-xs font-bold transition-all shadow-xs cursor-pointer',
+                      selectedTrackId === 'my_tracks'
+                        ? 'bg-white text-primary'
+                        : 'bg-white/20 text-white hover:bg-white/30',
+                    )}
+                  >
+                    ⭐ كل تخصصاتي
+                  </button>
+                  {registeredSpecializations.map((spec) => (
+                    <button
+                      key={spec.id}
+                      type="button"
+                      onClick={() => setSelectedTrackId(spec.id)}
+                      className={clsx(
+                        'rounded-xl px-2.5 py-1 text-xs font-bold transition-all shadow-xs cursor-pointer',
+                        selectedTrackId === spec.id
+                          ? 'bg-amber-400 text-slate-900'
+                          : 'bg-white/20 text-white hover:bg-white/30',
+                      )}
+                    >
+                      {spec.name}
+                    </button>
+                  ))}
+                </>
+              ) : (
+                registeredSpecialization && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTrackId(registeredSpecialization.id)}
+                    className={clsx(
+                      'rounded-xl px-3 py-1.5 text-xs font-bold transition-all shadow-xs cursor-pointer',
+                      selectedTrackId === registeredSpecialization.id
+                        ? 'bg-white text-primary'
+                        : 'bg-white/20 text-white hover:bg-white/30',
+                    )}
+                  >
+                    ⭐ عرض تاسكات تخصصي فقط
+                  </button>
+                )
+              )}
 
               {/* Member Switcher Dropdown */}
               <select
@@ -1277,18 +1364,27 @@ export function TasksPage() {
                   setActiveMemberId(mId);
                   localStorage.setItem('ta.registered_member_id', mId);
                   const newMember = members.find((x) => x.id === mId);
-                  if (newMember?.specialization_id) {
-                    setSelectedTrackId(newMember.specialization_id);
+                  const memberSpecs = newMember?.specialization_ids && newMember.specialization_ids.length > 0
+                    ? newMember.specialization_ids
+                    : (newMember?.specialization_id ? [newMember.specialization_id] : []);
+                  if (memberSpecs.length > 1) {
+                    setSelectedTrackId('my_tracks');
+                  } else if (memberSpecs[0]) {
+                    setSelectedTrackId(memberSpecs[0]);
                   }
                 }}
                 className="rounded-xl bg-white/20 text-white px-2.5 py-1.5 text-xs font-medium backdrop-blur-xs border border-white/30 focus:outline-none cursor-pointer"
                 title="تبديل العضو المتسجل لمعاينة تخصص آخر"
               >
                 {members.map((m) => {
-                  const specName = specMap.get(m.specialization_id ?? '')?.name ?? 'بدون تخصص';
+                  const mSpecs = (m.specialization_ids && m.specialization_ids.length > 0 ? m.specialization_ids : [m.specialization_id])
+                    .filter((id): id is string => Boolean(id))
+                    .map((id) => specMap.get(id)?.name)
+                    .filter(Boolean)
+                    .join(' · ');
                   return (
                     <option key={m.id} value={m.id} className="text-slate-800">
-                      {m.full_name} · {specName}
+                      {m.full_name} · {mSpecs || 'بدون تخصص'}
                     </option>
                   );
                 })}
@@ -1306,7 +1402,9 @@ export function TasksPage() {
           icon={<CheckSquare className="size-5" />}
           tone="indigo"
           hint={
-            selectedTrackId !== 'all'
+            selectedTrackId === 'my_tracks'
+              ? `في كل تخصصاتي (${registeredSpecializations.map((s) => s.name).join(' · ')})`
+              : selectedTrackId !== 'all'
               ? `في تراك ${specMap.get(selectedTrackId)?.name}`
               : selectedSessionId !== 'all'
               ? `في سيشن ${sessionMap.get(selectedSessionId)?.title}`
@@ -1375,11 +1473,27 @@ export function TasksPage() {
             </span>
           </button>
 
+          {registeredSpecializations.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setSelectedTrackId('my_tracks')}
+              className={clsx(
+                'flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+                selectedTrackId === 'my_tracks'
+                  ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/25 ring-2 ring-amber-500 ring-offset-1'
+                  : 'bg-amber-50 text-amber-900 border border-amber-300 font-bold hover:bg-amber-100',
+              )}
+            >
+              <Sparkles className="size-3.5" />
+              <span>⭐ كل تخصصاتي ({registeredSpecializations.map((s) => s.name).join(' + ')})</span>
+            </button>
+          )}
+
           {specializations.map((spec) => {
             const TrackIcon = getTrackIcon(spec.name);
             const count = countPerTrack.get(spec.id) ?? { total: 0, completed: 0 };
             const isSelected = selectedTrackId === spec.id;
-            const isRegisteredUserTrack = registeredSpecialization?.id === spec.id;
+            const isRegisteredUserTrack = registeredSpecializationIds.includes(spec.id);
 
             return (
               <button
@@ -1397,7 +1511,7 @@ export function TasksPage() {
               >
                 <TrackIcon className="size-3.5" />
                 <span>
-                  {isRegisteredUserTrack ? `⭐ ${spec.name} (تخصصي)` : spec.name}
+                  {isRegisteredUserTrack ? `⭐ ${spec.name} (من تخصصاتي)` : spec.name}
                 </span>
                 <span
                   className={clsx(
@@ -1417,7 +1531,8 @@ export function TasksPage() {
       <div className="card p-4 space-y-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SearchInput
-            placeholder="بحث في المهام والمهام الفرعية أو الأعضاء..."
+            label="البحث (Search)"
+            placeholder="ابحث بالاسم أو التراك أو السيشن..."
             value={search}
             onChange={setSearch}
           />

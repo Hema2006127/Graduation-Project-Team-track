@@ -47,7 +47,7 @@ export function buildSeedDb(): DemoDb {
     specializations: SEED_SPECIALIZATIONS.map((s) => ({ ...s, created_at: created })),
     members: SEED_MEMBERS.map((m) => ({
       id: m.id, member_code: m.member_code, full_name: m.full_name, email: m.email, phone: m.phone,
-      avatar_url: null, specialization_id: m.specialization_id, status: m.finalStatus,
+      avatar_url: null, specialization_id: m.specialization_id, specialization_ids: m.specialization_ids ?? [m.specialization_id], status: m.finalStatus,
       created_at: created, updated_at: created,
     })),
     accounts: SEED_ACCOUNTS.map((a) => ({
@@ -109,6 +109,15 @@ export function createDemoApi(storage: Storage = localStorage): Api {
       const raw = storage.getItem(DB_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as DemoDb;
+        if (parsed.members && Array.isArray(parsed.members)) {
+          const seedMembers = buildSeedDb().members;
+          parsed.members.forEach((m) => {
+            if (!m.specialization_ids || m.specialization_ids.length === 0) {
+              const seedMatch = seedMembers.find((sm) => sm.id === m.id);
+              m.specialization_ids = seedMatch?.specialization_ids ?? (m.specialization_id ? [m.specialization_id] : []);
+            }
+          });
+        }
         if (!parsed.tasks || !Array.isArray(parsed.tasks)) {
           parsed.tasks = buildSeedDb().tasks;
         } else {
@@ -269,7 +278,7 @@ export function createDemoApi(storage: Storage = localStorage): Api {
     deleteSpecialization: (id) =>
       tx(() => {
         requireAdmin();
-        if (db.members.some((m) => m.specialization_id === id))
+        if (db.members.some((m) => m.specialization_id === id || (m.specialization_ids && m.specialization_ids.includes(id))))
           throw new AppError('This specialization is assigned to members. Reassign them first.', '23503');
         db.specializations = db.specializations.filter((s) => s.id !== id);
       }),
@@ -284,7 +293,18 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         requireAdmin();
         assertUniqueMember(input);
         const t = now();
-        const m: TeamMember = { id: uid(), ...input, created_at: t, updated_at: t };
+        const specIds = input.specialization_ids && input.specialization_ids.length > 0
+          ? input.specialization_ids
+          : (input.specialization_id ? [input.specialization_id] : []);
+        const primarySpecId = input.specialization_id || specIds[0] || '';
+        const m: TeamMember = {
+          id: uid(),
+          ...input,
+          specialization_id: primarySpecId,
+          specialization_ids: specIds,
+          created_at: t,
+          updated_at: t,
+        };
         db.members.push(m);
         if (m.status === 'active') addToUpcoming(m.id);
         return m;
@@ -295,7 +315,15 @@ export function createDemoApi(storage: Storage = localStorage): Api {
         assertUniqueMember(input, id);
         const m = find(db.members, id, 'Member');
         const wasActive = m.status === 'active';
-        Object.assign(m, input, { updated_at: now() });
+        const specIds = input.specialization_ids && input.specialization_ids.length > 0
+          ? input.specialization_ids
+          : (input.specialization_id ? [input.specialization_id] : (m.specialization_ids || [m.specialization_id]));
+        const primarySpecId = input.specialization_id || specIds[0] || m.specialization_id;
+        Object.assign(m, input, {
+          specialization_id: primarySpecId,
+          specialization_ids: specIds,
+          updated_at: now(),
+        });
         if (!wasActive && m.status === 'active') addToUpcoming(m.id);
         if (wasActive && m.status === 'inactive') {
           const upcoming = new Set(db.sessions.filter(isUpcoming).map((s) => s.id));

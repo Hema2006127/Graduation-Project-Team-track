@@ -29,6 +29,7 @@ export interface TeamMember {
   phone: string | null;
   avatar_url: string | null;
   specialization_id: string | null;
+  specialization_ids?: string[];
   status: MemberStatus;
   created_at: string;
   updated_at: string;
@@ -106,7 +107,9 @@ export interface TrackTask {
 export type MemberInput = Pick<
   TeamMember,
   'member_code' | 'full_name' | 'email' | 'phone' | 'avatar_url' | 'specialization_id' | 'status'
->;
+> & {
+  specialization_ids?: string[];
+};
 export type SpecializationInput = Pick<Specialization, 'name' | 'description'>;
 export type SessionInput = Pick<
   Session,

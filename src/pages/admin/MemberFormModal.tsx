@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ImagePlus, Trash2 } from 'lucide-react';
+import { Check, ImagePlus, Layers, Trash2 } from 'lucide-react';
+import clsx from 'clsx';
 import type { MemberInput, TeamMember } from '@/types';
 import { api, errorMessage } from '@/services';
 import { memberSchema, validate, type FieldErrors } from '@/lib/validation';
@@ -10,7 +11,16 @@ import { SelectField, TextField } from '@/components/ui/Form';
 import { Avatar } from '@/components/ui/Display';
 import { useToast } from '@/components/ui/Toast';
 
-const EMPTY: MemberInput = { member_code: '', full_name: '', email: '', phone: null, avatar_url: null, specialization_id: '', status: 'active' };
+const EMPTY: MemberInput = {
+  member_code: '',
+  full_name: '',
+  email: '',
+  phone: null,
+  avatar_url: null,
+  specialization_id: '',
+  specialization_ids: [],
+  status: 'active',
+};
 
 function nextMemberCode(members: TeamMember[]) {
   const max = members.reduce((acc, m) => Math.max(acc, Number(/^TM(\d+)$/.exec(m.member_code)?.[1] ?? 0)), 0);
@@ -33,7 +43,14 @@ export function MemberFormModal({ open, onClose, member }: { open: boolean; onCl
     if (!open) return;
     setErrors({});
     autoCode.current = suggestedCode;
-    setForm(member ? { ...member } : { ...EMPTY, member_code: suggestedCode });
+    const initialSpecIds = member?.specialization_ids && member.specialization_ids.length > 0
+      ? member.specialization_ids
+      : (member?.specialization_id ? [member.specialization_id] : []);
+    setForm(
+      member
+        ? { ...member, specialization_ids: initialSpecIds }
+        : { ...EMPTY, member_code: suggestedCode, specialization_ids: [] },
+    );
   }, [open, member]);
 
   // If the member list finishes loading after the form opened, refresh the suggested ID (unless edited).
@@ -54,6 +71,28 @@ export function MemberFormModal({ open, onClose, member }: { open: boolean; onCl
 
   const set = <K extends keyof MemberInput>(k: K, v: MemberInput[K]) => setForm((f) => ({ ...f, [k]: v }));
 
+  const toggleSpecialization = (specId: string) => {
+    setForm((f) => {
+      const current = new Set<string>(
+        f.specialization_ids && f.specialization_ids.length > 0
+          ? f.specialization_ids
+          : (f.specialization_id ? [f.specialization_id] : []),
+      );
+      if (current.has(specId)) {
+        current.delete(specId);
+      } else {
+        current.add(specId);
+      }
+      const arr = Array.from(current);
+      const primary = f.specialization_id && current.has(f.specialization_id) ? f.specialization_id : (arr[0] ?? '');
+      return {
+        ...f,
+        specialization_id: primary,
+        specialization_ids: arr,
+      };
+    });
+  };
+
   async function onFile(file: File | undefined) {
     if (!file) return;
     if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) return toast.error('Unsupported image', 'Use PNG, JPG or WebP.');
@@ -70,11 +109,27 @@ export function MemberFormModal({ open, onClose, member }: { open: boolean; onCl
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const v = validate(memberSchema, { ...form, phone: form.phone ?? '', avatar_url: form.avatar_url ?? '' });
+    const currentSpecIds = form.specialization_ids && form.specialization_ids.length > 0
+      ? form.specialization_ids
+      : (form.specialization_id ? [form.specialization_id] : []);
+    const primarySpecId = form.specialization_id || currentSpecIds[0] || '';
+    const v = validate(memberSchema, {
+      ...form,
+      specialization_id: primarySpecId,
+      specialization_ids: currentSpecIds,
+      phone: form.phone ?? '',
+      avatar_url: form.avatar_url ?? '',
+    });
     if (v.errors) return setErrors(v.errors);
     setErrors({});
     save.mutate(v.data, { onSuccess: onClose });
   }
+
+  const selectedSpecIds = new Set(
+    form.specialization_ids && form.specialization_ids.length > 0
+      ? form.specialization_ids
+      : (form.specialization_id ? [form.specialization_id] : []),
+  );
 
   return (
     <Modal
@@ -113,7 +168,25 @@ export function MemberFormModal({ open, onClose, member }: { open: boolean; onCl
         <TextField label="Member ID" required value={form.member_code} onChange={(e) => set('member_code', e.target.value.toUpperCase())} error={errors.member_code} placeholder="TM001" />
         <TextField label="Email" required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} error={errors.email} placeholder="name@example.com" hint="Used to link the member’s login account" />
         <TextField label="Phone" type="tel" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} error={errors.phone} placeholder="+20 100 000 0000" />
-        <SelectField label="Specialization" required value={form.specialization_id ?? ''} onChange={(e) => set('specialization_id', e.target.value)} error={errors.specialization_id}>
+        
+        <SelectField
+          label="Primary Track / التراك الأساسي"
+          required
+          value={form.specialization_id ?? ''}
+          onChange={(e) => {
+            const specId = e.target.value;
+            setForm((f) => {
+              const nextIds = new Set(f.specialization_ids ?? []);
+              if (specId) nextIds.add(specId);
+              return {
+                ...f,
+                specialization_id: specId,
+                specialization_ids: Array.from(nextIds),
+              };
+            });
+          }}
+          error={errors.specialization_id}
+        >
           <option value="">Choose…</option>
           {specs.map((s) => (
             <option key={s.id} value={s.id}>
@@ -121,10 +194,52 @@ export function MemberFormModal({ open, onClose, member }: { open: boolean; onCl
             </option>
           ))}
         </SelectField>
+
         <SelectField label="Status" value={form.status} onChange={(e) => set('status', e.target.value as MemberInput['status'])} hint="Inactive members are excluded from new sessions">
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </SelectField>
+
+        {/* Multi-track selection chips */}
+        <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+              <Layers className="size-3.5 text-primary" />
+              تراكات العضو (يمكن للشخص الواحد الانضمام لأكثر من تراك):
+            </label>
+            <span className="text-[11px] text-slate-500 font-medium">
+              {selectedSpecIds.size} تراك مختار
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {specs.map((s) => {
+              const isSelected = selectedSpecIds.has(s.id);
+              const isPrimary = form.specialization_id === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleSpecialization(s.id)}
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-pointer border',
+                    isSelected
+                      ? isPrimary
+                        ? 'border-blue-600 bg-blue-600 text-white shadow-xs'
+                        : 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-100',
+                  )}
+                >
+                  {isSelected && <Check className="size-3 stroke-[3]" />}
+                  <span>{s.name}</span>
+                  {isPrimary && <span className="rounded bg-white/25 px-1 text-[10px] font-bold">أساسي</span>}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-slate-500">
+            انقر على أي تراك لإضافته أو إزالته من هذا الشخص. سيظهر الشخص في كل التراكات المحددة له.
+          </p>
+        </div>
       </form>
     </Modal>
   );
