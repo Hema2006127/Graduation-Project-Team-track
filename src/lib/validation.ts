@@ -102,6 +102,16 @@ export const trackTaskSchema = z.object({
     )
     .optional()
     .default([]),
+  materials: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string().trim().max(200).default(''),
+        url: z.string().trim().refine((v) => /^https?:\/\/\S+$/i.test(v), 'Enter a valid link starting with http:// or https://'),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 

@@ -1,5 +1,5 @@
 import { createClient, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js';
-import type { AttendanceRecord, Profile, Session, TeamMember, TrackTask, TrackTaskInput } from '@/types';
+import type { AttendanceRecord, Profile, Session, TaskMaterial, TeamMember, TrackTask, TrackTaskInput } from '@/types';
 import { AppError, type Api } from './api';
 
 
@@ -37,6 +37,30 @@ function setLocalMemberSpecs(memberId: string, specIds: string[]) {
     /* ignore */
   }
 }
+
+/**
+ * Task materials (Drive links) live in `track_tasks.materials`. Until migration
+ * 20261022000001_task_materials.sql is applied they are kept here, per task id.
+ */
+const LOCAL_TASK_MATERIALS_KEY = 'ta.task_materials';
+function getLocalTaskMaterials(): Record<string, TaskMaterial[]> {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_TASK_MATERIALS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+function setLocalTaskMaterials(taskId: string, materials: TaskMaterial[]) {
+  try {
+    const current = getLocalTaskMaterials();
+    current[taskId] = materials;
+    localStorage.setItem(LOCAL_TASK_MATERIALS_KEY, JSON.stringify(current));
+  } catch {
+    /* ignore */
+  }
+}
+const isMissingMaterialsColumn = (err: { message?: string } | null) =>
+  Boolean(err?.message && /materials|schema cache/i.test(err.message));
 
 /** Columns anonymous visitors may read (see migration 20260927000003_public_read.sql). */
 const PUBLIC_COLUMNS = {
@@ -137,7 +161,35 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
       const val = typeof payload.assigned_member_name === 'string' ? payload.assigned_member_name.trim() : payload.assigned_member_name;
       payload.assigned_member_name = val || null;
     }
+    if ('materials' in payload) {
+      payload.materials = (payload.materials ?? [])
+        .map((m: TaskMaterial) => ({ id: m.id, title: (m.title ?? '').trim(), url: (m.url ?? '').trim() }))
+        .filter((m: TaskMaterial) => m.url);
+    }
     return payload;
+  }
+
+  /** Runs an insert/update; if the `materials` column is not migrated yet, retries without it and keeps the links locally. */
+  async function writeTask(
+    payload: Record<string, any>,
+    run: (p: Record<string, any>) => PromiseLike<{ data: unknown; error: PostgrestError | null }>,
+  ): Promise<TrackTask> {
+    let { data, error } = await run(payload);
+    if (error && 'materials' in payload && isMissingMaterialsColumn(error)) {
+      const { materials, ...rest } = payload;
+      ({ data, error } = await run(rest));
+      if (!error && data) {
+        setLocalTaskMaterials((data as TrackTask).id, materials);
+        data = { ...(data as TrackTask), materials };
+      }
+    }
+    if (error) throw error;
+    return withMaterials(data as TrackTask);
+  }
+
+  function withMaterials(t: TrackTask): TrackTask {
+    if (t.materials && t.materials.length > 0) return t;
+    return { ...t, materials: getLocalTaskMaterials()[t.id] ?? [] };
   }
 
   async function syncLocalFallbackTasks() {
@@ -180,7 +232,12 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
           payload.id = t.id;
         }
 
-        const { error } = await sb.from('track_tasks').upsert(payload, { onConflict: 'id' });
+        if (t.materials?.length) payload.materials = t.materials;
+
+        const error = await writeTask(payload, (p) => sb.from('track_tasks').upsert(p, { onConflict: 'id' }).select().single()).then(
+          () => null,
+          (e) => e,
+        );
         if (error) {
           console.warn('[syncLocalFallbackTasks] Failed to sync task:', t.title, error);
           remaining.push(t);
@@ -393,7 +450,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
         // Fetch refreshed data if any local tasks were just synced
         const refreshed = await q;
         const result = (refreshed.data ?? data ?? []) as TrackTask[];
-        return result;
+        return result.map(withMaterials);
       } catch (err) {
         console.warn('[listTasks] Remote query failed, using local storage:', err);
         const raw = localStorage.getItem('ta.tasks.fallback');
@@ -407,12 +464,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
     async createTask(input) {
       const sanitized = sanitizeTaskPayload(input);
       try {
-        const { data, error } = await sb.from('track_tasks').insert(sanitized).select().single();
-        if (error) {
-          console.error('[createTask] Supabase insert error:', error);
-          throw error;
-        }
-        return data as TrackTask;
+        return await writeTask(sanitized, (p) => sb.from('track_tasks').insert(p).select().single());
       } catch (err) {
         console.warn('[createTask] Falling back to local storage:', err);
         const raw = localStorage.getItem('ta.tasks.fallback');
@@ -433,6 +485,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
           due_date: sanitized.due_date ?? null,
           completed_at: input.is_completed ? t : null,
           subtasks: input.subtasks ?? [],
+          materials: sanitized.materials ?? [],
           created_at: t,
           updated_at: t,
         };
@@ -446,14 +499,9 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
       const now = new Date().toISOString();
       const sanitized = sanitizeTaskPayload(input);
       try {
-        const { data, error } = await sb
-          .from('track_tasks')
-          .update({ ...sanitized, updated_at: now })
-          .eq('id', id)
-          .select()
-          .single();
-        if (error) throw error;
-        return data as TrackTask;
+        return await writeTask({ ...sanitized, updated_at: now }, (p) =>
+          sb.from('track_tasks').update(p).eq('id', id).select().single(),
+        );
       } catch (err) {
         console.warn('[updateTask] Supabase update error, falling back:', err);
         const raw = localStorage.getItem('ta.tasks.fallback');
@@ -471,7 +519,7 @@ export function createSupabaseApi(url: string, anonKey: string): Api {
       try {
         const { data, error } = await sb.from('track_tasks').update(patch).eq('id', id).select().single();
         if (error) throw error;
-        return data as TrackTask;
+        return withMaterials(data as TrackTask);
       } catch {
         const raw = localStorage.getItem('ta.tasks.fallback');
         const list: TrackTask[] = raw ? JSON.parse(raw) : [];

@@ -190,6 +190,7 @@ export interface SeedTask {
   priority: 'low' | 'medium' | 'high';
   due_date: string | null;
   subtasks?: { id: string; title: string; is_completed: boolean }[];
+  materials?: { id: string; title: string; url: string }[];
 }
 
 const sess = (titleKeyword: string) =>
@@ -212,6 +213,10 @@ export const SEED_TASKS: SeedTask[] = [
       { id: 'sub-1', title: 'Initialize Vite React project with TypeScript', is_completed: true },
       { id: 'sub-2', title: 'Configure Tailwind CSS v4 styling & color palette', is_completed: true },
       { id: 'sub-3', title: 'Setup react-router navigation and AppLayout', is_completed: true },
+    ],
+    materials: [
+      { id: 'mat-1', title: 'Session slides', url: 'https://drive.google.com/file/d/demo-frontend-setup-slides/view' },
+      { id: 'mat-2', title: 'Starter project folder', url: 'https://drive.google.com/drive/folders/demo-frontend-starter' },
     ],
   },
   {

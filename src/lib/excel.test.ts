@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildSeedDb } from '@/services/demo/demoApi';
 import { buildIndex } from './attendance';
 import { nowKey } from './dates';
-import { buildAttendanceMatrix, buildRecordsReport, buildSessionReport, loadXLSX, reportFileName, type ReportData } from './excel';
+import { buildAttendanceMatrix, buildRecordsReport, buildSessionReport, buildTasksReport, loadXLSX, reportFileName, tasksFileName, type ReportData } from './excel';
 
 const db = buildSeedDb();
 const idx = buildIndex(db.sessions, db.attendance, nowKey('Africa/Cairo'));
@@ -90,5 +90,45 @@ describe('session and records workbooks', async () => {
     const wb = buildRecordsReport(X, { ...data, records: recs }, 'status: Absent');
     const rows = X.utils.sheet_to_json<string[]>(wb.Sheets.Records, { header: 1, defval: '' });
     expect(rows.length - 5).toBe(recs.length);
+  });
+});
+
+describe('tasks workbook', async () => {
+  const X = await loadXLSX();
+  const base = { organization: 'Test Team', tasks: db.tasks, specializations: db.specializations, sessions: db.sessions, members: db.members };
+  const roundTrip = (wb: ReturnType<typeof buildTasksReport>) =>
+    X.read(X.write(wb, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
+
+  it('exports all weeks sorted by week, with summary, materials, subtasks and per-week sheets', () => {
+    const parsed = roundTrip(buildTasksReport(X, { ...base, week: 'all' }));
+    const weeks = [...new Set(db.tasks.map((t) => t.week_number))].sort((a, b) => a - b);
+    expect(parsed.SheetNames).toEqual(['All Tasks', 'Summary', 'Materials', 'Subtasks', ...weeks.map((w) => `Week ${w}`)]);
+    const rows = X.utils.sheet_to_json<(string | number)[]>(parsed.Sheets['All Tasks'], { header: 1, defval: '' });
+    expect(rows[3].slice(0, 3)).toEqual(['#', 'Week', 'Session']);
+    expect(rows[3].at(-1)).toBe('Drive Links');
+    const body = rows.slice(4);
+    expect(body.length).toBe(db.tasks.length);
+    const weekCol = body.map((r) => Number(r[1]));
+    expect(weekCol).toEqual([...weekCol].sort((a, b) => a - b));
+  });
+
+  it('filters a single week and keeps Drive links clickable', () => {
+    const withLinks = db.tasks.find((t) => t.materials?.length)!;
+    const parsed = roundTrip(buildTasksReport(X, { ...base, week: withLinks.week_number }));
+    expect(parsed.SheetNames[0]).toBe(`Week ${withLinks.week_number}`);
+    const rows = X.utils.sheet_to_json<(string | number)[]>(parsed.Sheets[parsed.SheetNames[0]], { header: 1, defval: '' });
+    expect(rows.slice(4).every((r) => Number(r[1]) === withLinks.week_number)).toBe(true);
+
+    const mats = parsed.Sheets.Materials;
+    const matRows = X.utils.sheet_to_json<string[]>(mats, { header: 1, defval: '' }).slice(2);
+    expect(matRows.length).toBe(
+      db.tasks.filter((t) => t.week_number === withLinks.week_number).reduce((a, t) => a + (t.materials?.length ?? 0), 0),
+    );
+    expect(mats.G3.l?.Target).toBe(matRows[0][6]);
+  });
+
+  it('names files by week', () => {
+    expect(tasksFileName(3, '2026-10-22')).toBe('Tasks_Week_3_2026-10-22.xlsx');
+    expect(tasksFileName('all', '2026-10-22')).toBe('Tasks_All_Weeks_2026-10-22.xlsx');
   });
 });

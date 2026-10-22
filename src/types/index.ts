@@ -84,6 +84,13 @@ export interface TaskSubtask {
   completed_at?: string | null;
 }
 
+/** A reference attached to a task — usually a Google Drive link (slides, recordings, files). */
+export interface TaskMaterial {
+  id: string;
+  title: string;
+  url: string;
+}
+
 export interface TrackTask {
   id: string;
   title: string;
@@ -99,6 +106,7 @@ export interface TrackTask {
   due_date: string | null;
   completed_at: string | null;
   subtasks?: TaskSubtask[];
+  materials?: TaskMaterial[];
   created_at: string;
   updated_at: string;
 }
@@ -135,6 +143,7 @@ export interface TrackTaskInput {
   priority?: TaskPriority;
   due_date?: string | null;
   subtasks?: TaskSubtask[];
+  materials?: TaskMaterial[];
 }
 
 

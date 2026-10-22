@@ -1,21 +1,22 @@
 import { useMemo, useState, type FormEvent, useEffect } from 'react';
 import {
-  AlertCircle, Calendar, CalendarCheck2, Check, CheckCircle2, CheckSquare, ChevronDown, ChevronUp, Clock, Cpu,
-  Database, FileText, Layers, Layout, ListChecks, ListPlus, MapPin, Palette, Pencil, Plus,
-  RotateCcw, Server, Shield, Smartphone, Sparkles, Trash2, User, UserCheck
+  AlertCircle, Calendar, CalendarCheck2, CalendarDays, Check, CheckCircle2, CheckSquare, ChevronDown, ChevronUp, Clock, Cpu,
+  Database, Download, ExternalLink, FileSpreadsheet, FileText, FolderOpen, HardDrive, Layers, Layout, Link2, ListChecks,
+  ListPlus, MapPin, Palette, Paperclip, Pencil, Plus, RotateCcw, Server, Shield, Smartphone, Sparkles, Trash2, User, UserCheck
 } from 'lucide-react';
 import clsx from 'clsx';
-import type { Session, Specialization, TaskPriority, TeamMember, TrackTask, TrackTaskInput } from '@/types';
+import type { Session, Specialization, TaskMaterial, TaskPriority, TeamMember, TrackTask, TrackTaskInput } from '@/types';
 import { api } from '@/services';
 import { trackTaskSchema, validate, type FieldErrors } from '@/lib/validation';
 import { useAuth } from '@/context/AuthContext';
-import { qk, useApiMutation, useMembers, useSessions, useSpecializations, useTasks } from '@/hooks/queries';
+import { qk, useApiMutation, useMembers, useSessions, useSettings, useSpecializations, useTasks } from '@/hooks/queries';
+import { buildTasksReport, downloadWorkbook, loadXLSX, tasksFileName } from '@/lib/excel';
 import { Avatar, Badge, EmptyState, ErrorState, PageHeader, Skeleton, StatCard } from '@/components/ui/Display';
 import { Button, IconButton } from '@/components/ui/Button';
 import { SearchInput, SelectField, TextAreaField, TextField } from '@/components/ui/Form';
 import { Modal, useConfirm } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import { formatDate } from '@/lib/dates';
+import { formatDate, todayIn } from '@/lib/dates';
 
 /** Helper to get track icon */
 function getTrackIcon(name: string) {
@@ -37,6 +38,42 @@ const PRIORITY_META: Record<TaskPriority, { label: string; tone: 'red' | 'amber'
   medium: { label: 'Medium Priority', tone: 'amber' },
   low: { label: 'Low Priority', tone: 'slate' },
 };
+
+const isValidUrl = (v: string) => /^https?:\/\/\S+$/i.test(v.trim());
+const isDriveUrl = (v: string) => /(drive|docs)\.google\.com/i.test(v);
+/** Fallback label for a link without a title: "Drive folder", "Drive file" or the host name. */
+function materialLabel(m: TaskMaterial) {
+  if (m.title.trim()) return m.title.trim();
+  if (isDriveUrl(m.url)) return /\/folders\//.test(m.url) ? 'Drive folder' : 'Drive file';
+  try {
+    return new URL(m.url).hostname.replace(/^www\./, '');
+  } catch {
+    return m.url;
+  }
+}
+
+/** Clickable chip that opens a material link in a new tab. */
+function MaterialChip({ material, compact }: { material: TaskMaterial; compact?: boolean }) {
+  const Icon = isDriveUrl(material.url) ? (/\/folders\//.test(material.url) ? FolderOpen : HardDrive) : Link2;
+  return (
+    <a
+      href={material.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      title={material.url}
+      className={clsx(
+        'inline-flex max-w-full items-center gap-1.5 rounded-lg border font-semibold transition-all',
+        'border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100',
+        compact ? 'px-2 py-0.5 text-[11px]' : 'px-3 py-1.5 text-xs',
+      )}
+    >
+      <Icon className={compact ? 'size-3 shrink-0' : 'size-3.5 shrink-0'} />
+      <span className="truncate">{materialLabel(material)}</span>
+      <ExternalLink className="size-3 shrink-0 opacity-60" />
+    </a>
+  );
+}
 
 // -----------------------------------------------------------------------------
 // Task Modal: Add / Edit Main Task with Multiple Subtasks
@@ -78,6 +115,9 @@ function TaskModal({
     subtasks: [],
   });
   const [subtasks, setSubtasks] = useState<{ id: string; title: string; is_completed: boolean }[]>([]);
+  const [materials, setMaterials] = useState<TaskMaterial[]>([]);
+  const [newMaterial, setNewMaterial] = useState({ title: '', url: '' });
+  const [materialError, setMaterialError] = useState('');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [bulkText, setBulkText] = useState('');
@@ -100,6 +140,7 @@ function TaskModal({
           subtasks: task.subtasks ?? [],
         });
         setSubtasks(task.subtasks ?? []);
+        setMaterials(task.materials ?? []);
       } else {
         const initialSessionId = defaultSessionId || (sessions[0]?.id ?? '');
         const matchedSession = sessions.find((s) => s.id === initialSessionId);
@@ -118,7 +159,10 @@ function TaskModal({
           subtasks: [],
         });
         setSubtasks([]);
+        setMaterials([]);
       }
+      setNewMaterial({ title: '', url: '' });
+      setMaterialError('');
       setNewSubtaskTitle('');
       setShowBulkAdd(false);
       setBulkText('');
@@ -166,6 +210,20 @@ function TaskModal({
     setSubtasks((prev) => prev.filter((s) => s.id !== id));
   }
 
+  /** Adds the typed link; returns false when it is invalid. */
+  function handleAddMaterial() {
+    const url = newMaterial.url.trim();
+    if (!url) return true;
+    if (!isValidUrl(url)) {
+      setMaterialError('الرابط غير صحيح — يجب أن يبدأ بـ https://');
+      return false;
+    }
+    setMaterials((prev) => [...prev, { id: crypto.randomUUID(), title: newMaterial.title.trim(), url }]);
+    setNewMaterial({ title: '', url: '' });
+    setMaterialError('');
+    return true;
+  }
+
   function submit(e: FormEvent) {
     e.preventDefault();
     const cleanSubtasks = subtasks
@@ -175,6 +233,17 @@ function TaskModal({
         is_completed: Boolean(st.is_completed),
       }))
       .filter((st) => st.title.length > 0);
+
+    // A link typed but not yet added with the button is saved too.
+    const pendingUrl = newMaterial.url.trim();
+    if (pendingUrl && !isValidUrl(pendingUrl)) {
+      setMaterialError('الرابط غير صحيح — يجب أن يبدأ بـ https://');
+      toast.error('رابط غير صحيح', 'تأكد من رابط الـ Drive قبل الحفظ');
+      return;
+    }
+    const finalMaterials = pendingUrl
+      ? [...materials, { id: crypto.randomUUID(), title: newMaterial.title.trim(), url: pendingUrl }]
+      : materials;
 
     const v = validate(trackTaskSchema, {
       ...form,
@@ -186,6 +255,7 @@ function TaskModal({
       due_date: form.due_date || null,
       description: form.description || null,
       subtasks: cleanSubtasks,
+      materials: finalMaterials,
     });
     if (v.errors) {
       setErrors(v.errors);
@@ -203,6 +273,7 @@ function TaskModal({
       {
         ...v.data,
         subtasks: cleanSubtasks,
+        materials: v.data.materials,
         session_title: sessionObj?.title ?? v.data.session_title ?? null,
         assigned_member_name: assigned?.full_name ?? null,
       },
@@ -240,18 +311,19 @@ function TaskModal({
       title={task ? 'تعديل المهمة وتفاصيلها' : 'إضافة مهمة جديدة للسيشن والتراك'}
       size="lg"
       footer={
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-slate-500">
-            {subtasks.length > 0 ? `${subtasks.length} مهام تفصيلية مضافة` : 'يمكنك إضافة مهام تفصيلية فرعية'}
+            {subtasks.length > 0 ? `${subtasks.length} مهام تفصيلية` : 'يمكنك إضافة مهام تفصيلية فرعية'}
+            {materials.length > 0 && ` · ${materials.length} لينك ماتريال`}
           </span>
           <div className="flex gap-2">
             <Button variant="secondary" type="button" onClick={onClose}>
               إلغاء
             </Button>
+            {/* type="button": the click submits once via requestSubmit (a submit button tied to the form would submit twice). */}
             <Button
               loading={saveMutation.isPending}
-              type="submit"
-              form="task-form"
+              type="button"
               onClick={() => {
                 const formEl = document.getElementById('task-form') as HTMLFormElement | null;
                 if (formEl) formEl.requestSubmit();
@@ -483,6 +555,88 @@ function TaskModal({
           error={errors.due_date}
         />
 
+        {/* Materials: Drive links (slides, recordings, files) */}
+        <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/60 to-teal-50/30 p-3.5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Paperclip className="size-4 text-emerald-600" />
+            <span className="text-xs font-bold text-ink">ماتريال التاسك ولينكات الـ Drive (Materials)</span>
+            <span className="rounded-full bg-emerald-600/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+              {materials.length}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+            <input
+              type="text"
+              value={newMaterial.title}
+              onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })}
+              placeholder="اسم الملف (مثال: سلايدات السيشن)"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-ink focus:border-emerald-500 focus:outline-none"
+            />
+            <input
+              type="url"
+              dir="ltr"
+              value={newMaterial.url}
+              onChange={(e) => {
+                setNewMaterial({ ...newMaterial, url: e.target.value });
+                if (materialError) setMaterialError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddMaterial();
+                }
+              }}
+              placeholder="https://drive.google.com/..."
+              className={clsx(
+                'rounded-lg border bg-white px-3 py-1.5 text-xs text-ink focus:outline-none',
+                materialError ? 'border-red-400 focus:border-red-500' : 'border-slate-300 focus:border-emerald-500',
+              )}
+            />
+            <Button size="sm" type="button" onClick={handleAddMaterial} icon={<Link2 className="size-3.5" />}>
+              إضافة لينك
+            </Button>
+          </div>
+          {materialError && <p className="text-[11px] font-medium text-red-600">{materialError}</p>}
+
+          {materials.length > 0 && (
+            <div className="space-y-1.5">
+              {materials.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-1.5 text-xs"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {isDriveUrl(m.url) ? (
+                      <HardDrive className="size-3.5 shrink-0 text-emerald-600" />
+                    ) : (
+                      <Link2 className="size-3.5 shrink-0 text-slate-500" />
+                    )}
+                    <span className="shrink-0 font-semibold text-slate-700">{materialLabel(m)}</span>
+                    <a
+                      href={m.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      dir="ltr"
+                      className="truncate text-[11px] text-blue-600 hover:underline"
+                    >
+                      {m.url}
+                    </a>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMaterials((prev) => prev.filter((x) => x.id !== m.id))}
+                    className="p-1 text-slate-400 transition-colors hover:text-red-500 cursor-pointer"
+                    title="حذف اللينك"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <TextAreaField
           label="ملاحظات وتفاصيل إضافية"
           rows={2}
@@ -581,8 +735,8 @@ function TaskDetailsModal({
       title="تفاصيل المهمة والمهام التابعة لها"
       size="lg"
       footer={
-        <div className="flex w-full items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant={task.is_completed ? 'secondary' : 'primary'}
@@ -671,7 +825,7 @@ function TaskDetailsModal({
             {task.due_date && (
               <div className="flex items-center gap-1.5">
                 <Calendar className="size-4 text-slate-400 shrink-0" />
-                <span>تسليم: {task.due_date}</span>
+                <span>تسليم: {formatDate(task.due_date)}</span>
               </div>
             )}
             <div className="flex items-center gap-1.5">
@@ -681,6 +835,35 @@ function TaskDetailsModal({
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Materials / Drive links */}
+        <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/30 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+              <Paperclip className="size-4 text-emerald-600" />
+              ماتريال التاسك ولينكات الـ Drive ({task.materials?.length ?? 0})
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onEdit(task);
+              }}
+              className="text-xs font-medium text-emerald-700 hover:underline cursor-pointer"
+            >
+              + إضافة / تعديل اللينكات
+            </button>
+          </div>
+          {task.materials && task.materials.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {task.materials.map((m) => (
+                <MaterialChip key={m.id} material={m} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">لا يوجد ماتريال مرفق بهذه المهمة بعد.</p>
+          )}
         </div>
 
         {/* Subtasks Section: View, Toggle, and Add Multiple Subtasks */}
@@ -806,6 +989,164 @@ function TaskDetailsModal({
 }
 
 // -----------------------------------------------------------------------------
+// Export Modal: download tasks of one week or all weeks as an Excel sheet
+// -----------------------------------------------------------------------------
+interface ExportTasksModalProps {
+  open: boolean;
+  onClose: () => void;
+  allTasks: TrackTask[];
+  /** Tasks after the page's track / session / status / search filters. */
+  filteredTasks: TrackTask[];
+  /** Human readable description of the active page filters ('' when none). */
+  filterDescription: string;
+  initialWeek: number | 'all';
+  specializations: Specialization[];
+  sessions: Session[];
+  members: TeamMember[];
+}
+
+function ExportTasksModal({
+  open, onClose, allTasks, filteredTasks, filterDescription, initialWeek, specializations, sessions, members,
+}: ExportTasksModalProps) {
+  const toast = useToast();
+  const settings = useSettings().data;
+  const [week, setWeek] = useState<number | 'all'>('all');
+  const [useFilters, setUseFilters] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setWeek(initialWeek);
+      setUseFilters(Boolean(filterDescription));
+    }
+  }, [open, initialWeek, filterDescription]);
+
+  const source = useFilters && filterDescription ? filteredTasks : allTasks;
+  const weeks = useMemo(() => {
+    const counts = new Map<number, number>();
+    source.forEach((t) => counts.set(t.week_number, (counts.get(t.week_number) ?? 0) + 1));
+    return [...counts.entries()].sort((a, b) => a[0] - b[0]);
+  }, [source]);
+  const selected = week === 'all' ? source : source.filter((t) => t.week_number === week);
+  const linkCount = selected.reduce((a, t) => a + (t.materials?.length ?? 0), 0);
+  const subtaskCount = selected.reduce((a, t) => a + (t.subtasks?.length ?? 0), 0);
+
+  async function download() {
+    if (selected.length === 0) return;
+    setBusy(true);
+    try {
+      const X = await loadXLSX();
+      const wb = buildTasksReport(X, {
+        organization: settings?.organization_name ?? 'Team',
+        tasks: selected,
+        specializations,
+        sessions,
+        members,
+        week,
+        filterDescription: useFilters ? filterDescription : '',
+      });
+      const today = todayIn(settings?.timezone ?? 'Africa/Cairo');
+      await downloadWorkbook(wb, tasksFileName(week, today));
+      toast.success('تم تصدير الشيت', `${selected.length} مهمة · ${linkCount} لينك Drive`);
+      onClose();
+    } catch (err) {
+      toast.error('تعذر تصدير الشيت', err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const chip = (active: boolean) =>
+    clsx(
+      'flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all cursor-pointer active:scale-95',
+      active
+        ? 'border-transparent bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm shadow-emerald-500/25'
+        : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50',
+    );
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="تصدير التاسكات لشيت Excel"
+      description="اختار الأسبوع اللي عايزه أو كل الأسابيع — الشيت هيكون مترتب بالأسبوع ثم السيشن والتراك، وفيه كل التفاصيل ولينكات الـ Drive."
+      footer={
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>إلغاء</Button>
+          <Button loading={busy} disabled={selected.length === 0} icon={<Download className="size-4" />} onClick={download}>
+            تحميل الشيت ({selected.length})
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+            <CalendarDays className="size-3.5 text-emerald-600" /> الأسبوع
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={chip(week === 'all')} onClick={() => setWeek('all')}>
+              كل الأسابيع
+              <span className="rounded-full bg-black/10 px-1.5 text-[10px]">{source.length}</span>
+            </button>
+            {weeks.map(([w, count]) => (
+              <button key={w} type="button" className={chip(week === w)} onClick={() => setWeek(w)}>
+                الأسبوع {w}
+                <span className="rounded-full bg-black/10 px-1.5 text-[10px]">{count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filterDescription && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs select-none">
+            <input
+              type="checkbox"
+              checked={useFilters}
+              onChange={(e) => setUseFilters(e.target.checked)}
+              className="mt-0.5 size-4 accent-emerald-600"
+            />
+            <span>
+              <span className="block font-bold text-slate-800">تطبيق الفلاتر الحالية فقط</span>
+              <span className="text-slate-500">{filterDescription}</span>
+            </span>
+          </label>
+        )}
+
+        <div className="grid grid-cols-3 gap-2 text-center">
+          {[
+            { label: 'مهمة', value: selected.length, icon: CheckSquare },
+            { label: 'مهمة فرعية', value: subtaskCount, icon: ListChecks },
+            { label: 'لينك Drive', value: linkCount, icon: HardDrive },
+          ].map(({ label, value, icon: Icon }) => (
+            <div key={label} className="rounded-xl border border-slate-200 bg-white p-3">
+              <Icon className="mx-auto mb-1 size-4 text-emerald-600" />
+              <div className="text-lg font-extrabold text-ink">{value}</div>
+              <div className="text-[11px] text-slate-500">{label}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3 text-[11px] leading-relaxed text-emerald-900">
+          <p className="mb-1 flex items-center gap-1.5 font-bold">
+            <FileSpreadsheet className="size-3.5" /> محتوى الشيت
+          </p>
+          <ul className="list-disc space-y-0.5 ps-4">
+            <li>{week === 'all' ? 'شيت لكل التاسكات + شيت منفصل لكل أسبوع' : `شيت تاسكات الأسبوع ${week}`} (الأسبوع، السيشن، التراك، المسؤول، الأولوية، الحالة، التواريخ، التفاصيل)</li>
+            <li>شيت Materials: كل لينكات الـ Drive قابلة للضغط</li>
+            <li>شيت Subtasks وشيت Summary بالإحصائيات لكل أسبوع وكل تراك</li>
+          </ul>
+        </div>
+
+        {selected.length === 0 && (
+          <p className="text-center text-xs text-slate-400">لا توجد مهام في هذا الاختيار.</p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // Main TasksPage Component
 // -----------------------------------------------------------------------------
 export function TasksPage() {
@@ -873,7 +1214,9 @@ export function TasksPage() {
 
   const [selectedSessionId, setSelectedSessionId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
-  const [viewMode, setViewMode] = useState<'by_session' | 'by_track' | 'flat'>('by_session');
+  const [weekFilter, setWeekFilter] = useState<number | 'all'>('all');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'by_session' | 'by_week' | 'by_track' | 'flat'>('by_session');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TrackTask | null>(null);
@@ -940,8 +1283,8 @@ export function TasksPage() {
     return allTasks.find((t) => t.id === viewingDetailsTask.id) ?? viewingDetailsTask;
   }, [viewingDetailsTask, allTasks]);
 
-  // Filtered tasks
-  const filteredTasks = useMemo(() => {
+  // Filtered tasks (all filters except the week)
+  const tasksBeforeWeek = useMemo(() => {
     let list = allTasks;
 
     if (selectedTrackId === 'my_tracks') {
@@ -965,12 +1308,43 @@ export function TasksPage() {
         const memberMatch = (t.assigned_member_name ?? '').toLowerCase().includes(q);
         const sessionMatch = (t.session_title ?? '').toLowerCase().includes(q);
         const subtasksMatch = (t.subtasks ?? []).some((st) => st.title.toLowerCase().includes(q));
-        return titleMatch || descMatch || memberMatch || sessionMatch || subtasksMatch;
+        const materialsMatch = (t.materials ?? []).some((m) => m.title.toLowerCase().includes(q));
+        return titleMatch || descMatch || memberMatch || sessionMatch || subtasksMatch || materialsMatch;
       });
     }
 
     return list;
-  }, [allTasks, selectedTrackId, selectedSessionId, statusFilter, search]);
+  }, [allTasks, selectedTrackId, selectedSessionId, statusFilter, search, registeredSpecializationIds]);
+
+  // The week is applied last so the Excel export can pick any week from the other filters.
+  const filteredTasks = useMemo(
+    () => (weekFilter === 'all' ? tasksBeforeWeek : tasksBeforeWeek.filter((t) => t.week_number === weekFilter)),
+    [tasksBeforeWeek, weekFilter],
+  );
+
+  // Weeks that have tasks (for the week filter chips)
+  const weekCounts = useMemo(() => {
+    const counts = new Map<number, { total: number; completed: number }>();
+    allTasks.forEach((t) => {
+      const cur = counts.get(t.week_number) ?? { total: 0, completed: 0 };
+      cur.total += 1;
+      if (t.is_completed) cur.completed += 1;
+      counts.set(t.week_number, cur);
+    });
+    return [...counts.entries()].sort((a, b) => a[0] - b[0]);
+  }, [allTasks]);
+
+  // Describes the track / session / status / search filters for the Excel export (week is chosen in the dialog).
+  const exportFilterDescription = useMemo(() => {
+    const parts: string[] = [];
+    if (selectedTrackId === 'my_tracks') parts.push(`Tracks: ${registeredSpecializations.map((s) => s.name).join(', ')}`);
+    else if (selectedTrackId !== 'all') parts.push(`Track: ${specMap.get(selectedTrackId)?.name ?? '—'}`);
+    if (selectedSessionId !== 'all') parts.push(`Session: ${sessionMap.get(selectedSessionId)?.title ?? '—'}`);
+    if (statusFilter !== 'all') parts.push(`Status: ${statusFilter === 'completed' ? 'Done' : 'Pending'}`);
+    if (search.trim()) parts.push(`Search: "${search.trim()}"`);
+    return parts.join(' · ');
+  }, [selectedTrackId, selectedSessionId, statusFilter, search, registeredSpecializations, specMap, sessionMap]);
+
 
   // Overall stats
   const stats = useMemo(() => {
@@ -1025,13 +1399,13 @@ export function TasksPage() {
       })
       .filter((g) => {
         if (selectedSessionId !== 'all') return g.sessionId === selectedSessionId;
-        return g.total > 0 || (selectedTrackId === 'all' && g.session !== null);
+        return g.total > 0 || (selectedTrackId === 'all' && weekFilter === 'all' && g.session !== null);
       })
       .sort((a, b) => {
         if (a.date && b.date) return new Date(b.date).getTime() - new Date(a.date).getTime();
         return 0;
       });
-  }, [filteredTasks, sessions, sessionMap, selectedSessionId, selectedTrackId]);
+  }, [filteredTasks, sessions, sessionMap, selectedSessionId, selectedTrackId, weekFilter]);
 
   // Tasks grouped by Track
   const tasksGroupedByTrack = useMemo(() => {
@@ -1057,6 +1431,24 @@ export function TasksPage() {
       })
       .filter((g) => g.total > 0 || (selectedTrackId !== 'all' && g.specId === selectedTrackId));
   }, [filteredTasks, specializations, specMap, selectedTrackId]);
+
+  // Tasks grouped by Week
+  const tasksGroupedByWeek = useMemo(() => {
+    const grouped = new Map<number, TrackTask[]>();
+    filteredTasks.forEach((t) => {
+      if (!grouped.has(t.week_number)) grouped.set(t.week_number, []);
+      grouped.get(t.week_number)!.push(t);
+    });
+    return [...grouped.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([week, tasks]) => ({
+        week,
+        tasks,
+        total: tasks.length,
+        completed: tasks.filter((t) => t.is_completed).length,
+        links: tasks.reduce((a, t) => a + (t.materials?.length ?? 0), 0),
+      }));
+  }, [filteredTasks]);
 
   const isLoading = tasksQuery.isLoading || specializationsQuery.isLoading || sessionsQuery.isLoading;
   const isError = tasksQuery.isError || specializationsQuery.isError || sessionsQuery.isError;
@@ -1085,20 +1477,36 @@ export function TasksPage() {
     const assigneeName = assignee?.full_name ?? task.assigned_member_name;
     const sessionTitle = task.session_title || (task.session_id ? sessionMap.get(task.session_id)?.title : null);
     const subtasks = task.subtasks ?? [];
+    const materials = task.materials ?? [];
     const completedSubCount = subtasks.filter((s) => s.is_completed).length;
+    const subPercent = subtasks.length > 0 ? Math.round((completedSubCount / subtasks.length) * 100) : 0;
     const isExpanded = expandedTaskIds.has(task.id);
 
     return (
       <div
         key={task.id}
         className={clsx(
-          'group relative flex flex-col rounded-2xl border p-4.5 transition-all duration-200',
+          'group relative flex flex-col overflow-hidden rounded-2xl border p-4.5 transition-all duration-200',
           task.is_completed
             ? 'bg-slate-50/70 border-slate-200/70 shadow-2xs opacity-90'
             : 'bg-white border-slate-200/90 shadow-2xs hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5',
         )}
       >
-        <div className="flex items-start justify-between gap-3">
+        {/* Priority accent stripe */}
+        <span
+          aria-hidden
+          className={clsx(
+            'absolute inset-y-0 start-0 w-1',
+            task.is_completed
+              ? 'bg-emerald-400'
+              : task.priority === 'high'
+              ? 'bg-gradient-to-b from-rose-500 to-red-500'
+              : task.priority === 'medium'
+              ? 'bg-gradient-to-b from-amber-400 to-orange-400'
+              : 'bg-slate-300',
+          )}
+        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3.5 min-w-0 flex-1">
             {/* Main Task Checkbox */}
             <button
@@ -1193,6 +1601,17 @@ export function TasksPage() {
 
                 <Badge tone={priority.tone}>{priority.label}</Badge>
 
+                {viewMode !== 'by_week' && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 font-semibold text-teal-700 ring-1 ring-teal-600/20 ring-inset cursor-pointer hover:bg-teal-100 transition-colors"
+                    onClick={() => setWeekFilter(task.week_number)}
+                    title="Filter by this week"
+                  >
+                    <CalendarDays className="size-3" />
+                    Week {task.week_number}
+                  </span>
+                )}
+
                 {assigneeName ? (
                   <span className="inline-flex items-center gap-1.5 text-slate-600 font-medium bg-slate-100/80 px-2 py-0.5 rounded-md">
                     <Avatar name={assigneeName} size="sm" />
@@ -1207,15 +1626,38 @@ export function TasksPage() {
                 {task.due_date && (
                   <span className="inline-flex items-center gap-1 text-slate-500">
                     <Calendar className="size-3" />
-                    <span>{task.due_date}</span>
+                    <span>{formatDate(task.due_date)}</span>
                   </span>
                 )}
               </div>
+
+              {/* Materials / Drive links */}
+              {materials.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <Paperclip className="size-3.5 text-emerald-600" />
+                  {materials.map((m) => (
+                    <MaterialChip key={m.id} material={m} compact />
+                  ))}
+                </div>
+              )}
+
+              {/* Subtask progress */}
+              {subtasks.length > 0 && (
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="h-1.5 w-full max-w-56 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300"
+                      style={{ width: `${subPercent}%` }}
+                    />
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-500">{subPercent}%</span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1 self-end sm:self-center shrink-0">
+          <div className="flex items-center gap-1 self-end sm:self-start shrink-0">
             <Button
               size="sm"
               variant="secondary"
@@ -1292,16 +1734,26 @@ export function TasksPage() {
         title="Weekly Session Tasks & To-Do"
         description="كل سيشن باسمها ليها تاسكاتها — حدد التراك، أضف مهام السيشن والمهام التفصيلية، وعلم على المنجز منها."
         actions={
-          <Button
-            icon={<Plus className="size-4" />}
-            onClick={() => {
-              setEditingTask(null);
-              setActiveSessionForModal(selectedSessionId !== 'all' ? selectedSessionId : undefined);
-              setModalOpen(true);
-            }}
-          >
-            إضافة مهمة جديدة
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              icon={<FileSpreadsheet className="size-4 text-emerald-600" />}
+              onClick={() => setExportOpen(true)}
+              disabled={allTasks.length === 0}
+            >
+              تصدير Excel
+            </Button>
+            <Button
+              icon={<Plus className="size-4" />}
+              onClick={() => {
+                setEditingTask(null);
+                setActiveSessionForModal(selectedSessionId !== 'all' ? selectedSessionId : undefined);
+                setModalOpen(true);
+              }}
+            >
+              إضافة مهمة جديدة
+            </Button>
+          </div>
         }
       />
 
@@ -1563,7 +2015,7 @@ export function TasksPage() {
 
       {/* Control Filters Bar */}
       <div className="card p-4 space-y-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.5fr]">
           <SearchInput
             label="البحث (Search)"
             placeholder="ابحث بالاسم أو التراك أو السيشن..."
@@ -1597,12 +2049,12 @@ export function TasksPage() {
           {/* View mode switcher */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">طريقة العرض (View)</label>
-            <div className="flex rounded-lg bg-slate-100 p-1">
+            <div className="grid grid-cols-2 gap-0.5 rounded-lg bg-slate-100 p-1 sm:grid-cols-4">
               <button
                 type="button"
                 onClick={() => setViewMode('by_session')}
                 className={clsx(
-                  'flex-1 rounded-md py-1 text-xs font-semibold transition-all cursor-pointer text-center',
+                  'flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] font-semibold transition-all cursor-pointer text-center',
                   viewMode === 'by_session' ? 'bg-white text-primary shadow-2xs font-bold' : 'text-slate-600',
                 )}
               >
@@ -1610,9 +2062,19 @@ export function TasksPage() {
               </button>
               <button
                 type="button"
+                onClick={() => setViewMode('by_week')}
+                className={clsx(
+                  'flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] font-semibold transition-all cursor-pointer text-center',
+                  viewMode === 'by_week' ? 'bg-white text-primary shadow-2xs font-bold' : 'text-slate-600',
+                )}
+              >
+                حسب الأسبوع
+              </button>
+              <button
+                type="button"
                 onClick={() => setViewMode('by_track')}
                 className={clsx(
-                  'flex-1 rounded-md py-1 text-xs font-semibold transition-all cursor-pointer text-center',
+                  'flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] font-semibold transition-all cursor-pointer text-center',
                   viewMode === 'by_track' ? 'bg-white text-primary shadow-2xs font-bold' : 'text-slate-600',
                 )}
               >
@@ -1622,7 +2084,7 @@ export function TasksPage() {
                 type="button"
                 onClick={() => setViewMode('flat')}
                 className={clsx(
-                  'flex-1 rounded-md py-1 text-xs font-semibold transition-all cursor-pointer text-center',
+                  'flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] font-semibold transition-all cursor-pointer text-center',
                   viewMode === 'flat' ? 'bg-white text-primary shadow-2xs font-bold' : 'text-slate-600',
                 )}
               >
@@ -1631,6 +2093,41 @@ export function TasksPage() {
             </div>
           </div>
         </div>
+
+        {/* Week filter chips */}
+        {weekCounts.length > 0 && (
+          <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
+            <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-slate-500">
+              <CalendarDays className="size-3.5 text-teal-600" /> الأسبوع
+            </span>
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+              {[['all', null] as const, ...weekCounts].map(([w, count]) => {
+                const active = weekFilter === w;
+                const done = count && count.total > 0 && count.completed === count.total;
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setWeekFilter(w)}
+                    className={clsx(
+                      'flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer active:scale-95',
+                      active
+                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm shadow-teal-500/25'
+                        : 'bg-slate-100/90 text-slate-700 hover:bg-slate-200/80',
+                    )}
+                  >
+                    {w === 'all' ? 'كل الأسابيع' : `W${w}`}
+                    {count && (
+                      <span className={clsx('rounded-full px-1.5 text-[10px]', active ? 'bg-white/20' : 'bg-slate-200')}>
+                        {done ? '✓' : `${count.completed}/${count.total}`}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -1644,7 +2141,7 @@ export function TasksPage() {
         <EmptyState
           title="لا توجد مهام مطابقة"
           description={
-            search || selectedTrackId !== 'all' || selectedSessionId !== 'all' || statusFilter !== 'all'
+            search || selectedTrackId !== 'all' || selectedSessionId !== 'all' || statusFilter !== 'all' || weekFilter !== 'all'
               ? 'جرّب تغيير الفلاتر أو البحث لعرض مهام أخرى.'
               : 'لم تتم إضافة أي مهام أسبوعية بعد.'
           }
@@ -1707,7 +2204,7 @@ export function TasksPage() {
                     </div>
 
                     {/* Progress Bar & Add Task Button */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-3">
                       {group.total > 0 && (
                         <div className="flex items-center gap-2.5 text-xs">
                           <div className="w-24 sm:w-36 bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/60">
@@ -1749,6 +2246,67 @@ export function TasksPage() {
                       {group.tasks.map((task) => renderTaskItem(task, false))}
                     </div>
                   )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : viewMode === 'by_week' ? (
+        /* ------------------------------------------------------------------- */
+        /* View: Tasks Grouped By Week                                         */
+        /* ------------------------------------------------------------------- */
+        <div className="space-y-6">
+          {tasksGroupedByWeek.map((group) => {
+            const percent = group.total > 0 ? Math.round((group.completed / group.total) * 100) : 0;
+            return (
+              <div
+                key={group.week}
+                className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-xs transition-all duration-200 hover:shadow-md"
+              >
+                <div className="border-b border-slate-100 bg-gradient-to-r from-teal-50/70 via-emerald-50/30 to-slate-50 p-5 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <span className="flex size-11 flex-col items-center justify-center rounded-2xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white shadow-sm shadow-teal-500/25">
+                        <span className="text-[9px] font-bold uppercase leading-none opacity-80">Week</span>
+                        <span className="text-base font-extrabold leading-tight">{group.week}</span>
+                      </span>
+                      <div>
+                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">الأسبوع {group.week}</h2>
+                        <p className="text-xs text-slate-500 font-medium">
+                          {group.total} مهام · {group.links} لينك ماتريال
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2.5 text-xs">
+                        <div className="w-24 sm:w-36 bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/60">
+                          <div
+                            className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <span className="font-extrabold text-slate-800 whitespace-nowrap">
+                          {group.completed}/{group.total} ({percent}%)
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={<FileSpreadsheet className="size-3.5 text-emerald-600" />}
+                        onClick={() => {
+                          setWeekFilter(group.week);
+                          setExportOpen(true);
+                        }}
+                      >
+                        تصدير الأسبوع
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 sm:p-5">
+                  <div className="grid grid-cols-1 gap-3">
+                    {group.tasks.map((task) => renderTaskItem(task, true))}
+                  </div>
                 </div>
               </div>
             );
@@ -1832,6 +2390,19 @@ export function TasksPage() {
         }
         defaultSessionId={activeSessionForModal ?? (selectedSessionId !== 'all' ? selectedSessionId : undefined)}
         defaultMemberId={registeredMember?.id}
+        specializations={specializations}
+        sessions={sessions}
+        members={members}
+      />
+
+      {/* Excel export (one week or all weeks) */}
+      <ExportTasksModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        allTasks={allTasks}
+        filteredTasks={tasksBeforeWeek}
+        filterDescription={exportFilterDescription}
+        initialWeek={weekFilter}
         specializations={specializations}
         sessions={sessions}
         members={members}

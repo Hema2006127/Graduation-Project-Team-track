@@ -6,7 +6,7 @@
  */
 import type {
   AppSettings, AttendanceRecord, MemberInput, Profile, Role, Session, Specialization, TeamMember,
-  TrackTask,
+  TaskMaterial, TrackTask,
 } from '@/types';
 
 import { addDays, hhmm, nowKey, todayIn } from '@/lib/dates';
@@ -35,6 +35,10 @@ interface DemoDb {
 
 const now = () => new Date().toISOString();
 const uid = () => crypto.randomUUID();
+const cleanMaterials = (list: TaskMaterial[] | undefined): TaskMaterial[] =>
+  (list ?? [])
+    .map((m) => ({ id: m.id || uid(), title: (m.title ?? '').trim(), url: (m.url ?? '').trim() }))
+    .filter((m) => m.url);
 const clone = <T,>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms));
 const denied = () => new AppError("You don't have permission to perform this action.", '42501');
@@ -82,6 +86,7 @@ export function buildSeedDb(): DemoDb {
       due_date: t.due_date,
       completed_at: t.is_completed ? created : null,
       subtasks: t.subtasks ? t.subtasks.map((st) => ({ ...st, completed_at: st.is_completed ? created : null })) : [],
+      materials: t.materials ?? [],
       created_at: created,
       updated_at: created,
     };
@@ -507,6 +512,7 @@ export function createDemoApi(storage: Storage = localStorage): Api {
             is_completed: Boolean(st.is_completed),
             completed_at: st.is_completed ? (st.completed_at || t) : null,
           })),
+          materials: cleanMaterials(input.materials),
           created_at: t,
           updated_at: t,
         };
@@ -552,6 +558,7 @@ export function createDemoApi(storage: Storage = localStorage): Api {
             completed_at: st.is_completed ? (st.completed_at || t) : null,
           }));
         }
+        if (input.materials !== undefined) task.materials = cleanMaterials(input.materials);
         task.updated_at = t;
         return task;
       }),

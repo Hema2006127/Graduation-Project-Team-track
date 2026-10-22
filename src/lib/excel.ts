@@ -3,11 +3,12 @@
  *  1. Attendance matrix — one column per session (P/A/L/E) + totals + %.
  *  2. Session report    — one session, one row per member.
  *  3. Records report    — the filtered record list from the Reports page.
+ *  4. Tasks report      — track tasks for one week or all weeks, with Drive links.
  * Every workbook has a formatted header, column widths, auto-filters, real
  * Excel dates, percentage formats and a summary section.
  */
 import type { WorkBook, WorkSheet } from 'xlsx-js-style';
-import type { AttendanceRecord, AttendanceStatus, Profile, Session, Specialization, TeamMember } from '@/types';
+import type { AttendanceRecord, AttendanceStatus, Profile, Session, Specialization, TaskPriority, TeamMember, TrackTask } from '@/types';
 import { countStatuses, STATUS_META, sortSessions } from './attendance';
 import { formatDate, formatDateTime, formatTimeRange, MONTHS, parseISODate } from './dates';
 
@@ -48,7 +49,7 @@ const statusStyle = (s: AttendanceStatus | null) => ({
   ...(s ? { fill: { fgColor: { rgb: STATUS_FILL[s] } }, font: { bold: true } } : { font: { color: { rgb: '94A3B8' } } }),
 });
 
-type Cell = { v: string | number; t: 's' | 'n'; s?: object; z?: string };
+type Cell = { v: string | number; t: 's' | 'n'; s?: object; z?: string; l?: { Target: string; Tooltip?: string } };
 const str = (v: string | null | undefined, s: object = S.cell): Cell => ({ v: v ?? '', t: 's', s });
 const num = (v: number, s: object = S.center, z?: string): Cell => ({ v, t: 'n', s, ...(z ? { z } : {}) });
 const pct = (rate: number | null, s: object = S.center): Cell =>
@@ -306,6 +307,216 @@ export function buildRecordsReport(X: XLSXModule, d: ReportData, filterDescripti
   X.utils.book_append_sheet(wb, ws, 'Records');
   return wb;
 }
+
+// ---- 4. Track tasks ----------------------------------------------------------
+export interface TasksReportData {
+  organization: string;
+  tasks: TrackTask[];
+  specializations: Specialization[];
+  sessions: Session[];
+  members: TeamMember[];
+  /** A single week number, or 'all' for every week (adds one sheet per week). */
+  week: number | 'all';
+  /** Extra filters applied before export (track, session…), shown in the header. */
+  filterDescription?: string;
+  generatedAt?: Date;
+}
+
+const PRIORITY_ORDER: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+const PRIORITY_LABEL: Record<TaskPriority, string> = { high: 'High', medium: 'Medium', low: 'Low' };
+const PRIORITY_FILL: Record<TaskPriority, string> = { high: 'FEE2E2', medium: 'FEF3C7', low: 'F1F5F9' };
+const DONE_FILL = 'DCFCE7';
+const PENDING_FILL = 'FEF3C7';
+const WEEK_FILLS = ['FFFFFF', 'F8FAFC'];
+const LINK_FONT = { color: { rgb: '2563EB' }, underline: true };
+
+/** Clickable hyperlink cell. */
+const link = (url: string, label: string = url, s: object = S.cell): Cell => ({
+  v: label, t: 's', l: { Target: url, Tooltip: url }, s: { ...s, font: LINK_FONT },
+});
+const wrap = (s: object) => ({ ...s, alignment: { vertical: 'top', wrapText: true } });
+
+type TaskRow = {
+  t: TrackTask;
+  session: Session | undefined;
+  track: string;
+  assignee: string;
+  subtasks: NonNullable<TrackTask['subtasks']>;
+  materials: NonNullable<TrackTask['materials']>;
+};
+
+/** Sorted: week → session date → track → priority → title. */
+export function sortTasksForReport(d: Pick<TasksReportData, 'tasks' | 'specializations' | 'sessions' | 'members'>): TaskRow[] {
+  const sessionById = new Map(d.sessions.map((s) => [s.id, s]));
+  const memberById = new Map(d.members.map((m) => [m.id, m]));
+  const specById = new Map(d.specializations.map((s) => [s.id, s.name]));
+  return d.tasks
+    .map((t) => ({
+      t,
+      session: t.session_id ? sessionById.get(t.session_id) : undefined,
+      track: specById.get(t.specialization_id) ?? '—',
+      assignee: (t.assigned_member_id && memberById.get(t.assigned_member_id)?.full_name) || t.assigned_member_name || 'Whole team',
+      subtasks: t.subtasks ?? [],
+      materials: (t.materials ?? []).filter((m) => m.url),
+    }))
+    .sort(
+      (a, b) =>
+        a.t.week_number - b.t.week_number ||
+        (a.session?.session_date ?? '9999').localeCompare(b.session?.session_date ?? '9999') ||
+        a.track.localeCompare(b.track) ||
+        (PRIORITY_ORDER[a.t.priority] ?? 1) - (PRIORITY_ORDER[b.t.priority] ?? 1) ||
+        a.t.title.localeCompare(b.t.title),
+    );
+}
+
+const taskSessionTitle = (r: TaskRow) => r.session?.title ?? r.t.session_title ?? '—';
+
+function tasksSheet(X: XLSXModule, d: TasksReportData, rows: TaskRow[], title: string): WorkSheet {
+  const header = [
+    '#', 'Week', 'Session', 'Session Date', 'Track', 'Task', 'Details', 'Assigned To', 'Priority', 'Status',
+    'Due Date', 'Completed On', 'Subtasks Done', 'Subtasks', 'Materials', 'Drive Links',
+  ];
+  const HEADER_ROW = 3;
+  const done = rows.filter((r) => r.t.is_completed).length;
+  const out: (Cell | null)[][] = [
+    [str(`${d.organization} — ${title}`, S.title)],
+    [str(`${d.filterDescription ? `Filters: ${d.filterDescription}   •   ` : ''}Generated ${formatDateTime((d.generatedAt ?? new Date()).toISOString())}`, S.subtitle)],
+    [str(`Tasks: ${rows.length}   •   Done ${done}   •   Pending ${rows.length - done}   •   Completion ${rows.length ? Math.round((done / rows.length) * 100) : 0}%`, S.subtitle)],
+    header.map((h) => str(h, S.header)),
+  ];
+  const weeks = [...new Set(rows.map((r) => r.t.week_number))];
+  rows.forEach((r, i) => {
+    // Alternate the background per week so week blocks stand out when sorted.
+    const fill = { fill: { fgColor: { rgb: WEEK_FILLS[weeks.indexOf(r.t.week_number) % 2] } } };
+    const base = { ...S.cell, ...fill };
+    const top = wrap(base);
+    const center = { ...S.center, ...fill };
+    const subDone = r.subtasks.filter((s) => s.is_completed).length;
+    const links = r.materials.map((m) => m.url).join('\n');
+    out.push([
+      num(i + 1, center),
+      num(r.t.week_number, { ...center, font: { bold: true } }),
+      str(taskSessionTitle(r), top),
+      r.session ? date(r.session.session_date, center) : str('—', center),
+      str(r.track, base),
+      str(r.t.title, { ...top, font: { bold: true } }),
+      str(r.t.description, top),
+      str(r.assignee, base),
+      str(PRIORITY_LABEL[r.t.priority] ?? r.t.priority, { ...S.center, fill: { fgColor: { rgb: PRIORITY_FILL[r.t.priority] ?? 'FFFFFF' } } }),
+      str(r.t.is_completed ? 'Done' : 'Pending', { ...S.center, font: { bold: true }, fill: { fgColor: { rgb: r.t.is_completed ? DONE_FILL : PENDING_FILL } } }),
+      r.t.due_date ? date(r.t.due_date, center) : str('—', center),
+      r.t.completed_at ? date(r.t.completed_at.slice(0, 10), center) : str('—', center),
+      str(r.subtasks.length ? `${subDone}/${r.subtasks.length}` : '—', center),
+      str(r.subtasks.map((s) => `${s.is_completed ? '✓' : '☐'} ${s.title}`).join('\n'), top),
+      str(r.materials.map((m) => m.title || 'Link').join('\n'), top),
+      // A cell holds one hyperlink: the first link is clickable here, every link is clickable on the Materials sheet.
+      r.materials.length ? link(r.materials[0].url, links, top) : str('—', center),
+    ]);
+  });
+  const lastCol = header.length - 1;
+  return sheet(X, out, {
+    widths: [5, 7, 24, 12, 16, 32, 40, 20, 10, 10, 12, 13, 10, 38, 26, 48],
+    filter: [HEADER_ROW, 0, Math.max(HEADER_ROW, out.length - 1), lastCol],
+    merges: [[0, 0, 0, 8], [1, 0, 1, 8], [2, 0, 2, 8]],
+    headerRow: HEADER_ROW,
+  });
+}
+
+export function buildTasksReport(X: XLSXModule, d: TasksReportData): WorkBook {
+  const all = sortTasksForReport(d);
+  const rows = d.week === 'all' ? all : all.filter((r) => r.t.week_number === d.week);
+  const weeks = [...new Set(rows.map((r) => r.t.week_number))];
+  const wb = X.utils.book_new();
+
+  X.utils.book_append_sheet(wb, tasksSheet(X, d, rows, d.week === 'all' ? 'Tasks — All Weeks' : `Tasks — Week ${d.week}`), d.week === 'all' ? 'All Tasks' : `Week ${d.week}`);
+
+  // Summary: per week, then per track
+  const summarize = (list: TaskRow[]) => {
+    const done = list.filter((r) => r.t.is_completed).length;
+    const subs = list.flatMap((r) => r.subtasks);
+    return {
+      total: list.length,
+      done,
+      pending: list.length - done,
+      rate: list.length ? (done / list.length) * 100 : null,
+      subs: `${subs.filter((s) => s.is_completed).length}/${subs.length}`,
+      materials: list.reduce((a, r) => a + r.materials.length, 0),
+    };
+  };
+  const summaryHeader = ['Tasks', 'Done', 'Pending', 'Completion %', 'Subtasks Done', 'Drive Links'];
+  const summaryCells = (s: ReturnType<typeof summarize>, style: object = S.center) => [
+    num(s.total, style), num(s.done, style), num(s.pending, style), pct(s.rate, style), str(s.subs, style), num(s.materials, style),
+  ];
+  const tracks = [...new Set(rows.map((r) => r.track))].sort();
+  const totals = summarize(rows);
+  const summaryRows: (Cell | null)[][] = [
+    [str(`${d.organization} — Tasks Summary`, S.title)],
+    [str(`${d.week === 'all' ? 'All weeks' : `Week ${d.week}`}${d.filterDescription ? `   •   ${d.filterDescription}` : ''}   •   Generated ${formatDateTime((d.generatedAt ?? new Date()).toISOString())}`, S.subtitle)],
+    [],
+    [str('By week', S.section)],
+    [str('Week', S.header), ...summaryHeader.map((h) => str(h, S.header))],
+    ...weeks.map((w) => [str(`Week ${w}`, S.center), ...summaryCells(summarize(rows.filter((r) => r.t.week_number === w)))]),
+    [str('TOTAL', S.total), ...summaryCells(totals, S.total)],
+    [],
+    [str('By track', S.section)],
+    [str('Track', S.header), ...summaryHeader.map((h) => str(h, S.header))],
+    ...tracks.map((tr) => [str(tr), ...summaryCells(summarize(rows.filter((r) => r.track === tr)))]),
+    [str('TOTAL', S.total), ...summaryCells(totals, S.total)],
+  ];
+  X.utils.book_append_sheet(wb, sheet(X, summaryRows, { widths: [24, 9, 9, 10, 14, 14, 12], merges: [[0, 0, 0, 6], [1, 0, 1, 6]] }), 'Summary');
+
+  // Materials: one row per link, every link clickable
+  const matHeader = ['Week', 'Session', 'Track', 'Task', 'Status', 'Material', 'Drive Link'];
+  const matRows: (Cell | null)[][] = [
+    [str('Task materials & Drive links', S.title)],
+    matHeader.map((h) => str(h, S.header)),
+    ...rows.flatMap((r) =>
+      r.materials.map((m) => [
+        num(r.t.week_number), str(taskSessionTitle(r)), str(r.track), str(r.t.title),
+        str(r.t.is_completed ? 'Done' : 'Pending', { ...S.center, fill: { fgColor: { rgb: r.t.is_completed ? DONE_FILL : PENDING_FILL } } }),
+        str(m.title || 'Link'), link(m.url),
+      ]),
+    ),
+  ];
+  if (matRows.length === 2) matRows.push([str('No materials attached to these tasks.', S.cell)]);
+  X.utils.book_append_sheet(
+    wb,
+    sheet(X, matRows, { widths: [7, 24, 16, 32, 10, 28, 60], filter: [1, 0, matRows.length - 1, matHeader.length - 1], headerRow: 1 }),
+    'Materials',
+  );
+
+  // Subtasks: one row per subtask
+  const subHeader = ['Week', 'Track', 'Task', 'Subtask', 'Status', 'Completed On'];
+  const subRows: (Cell | null)[][] = [
+    [str('Subtasks checklist', S.title)],
+    subHeader.map((h) => str(h, S.header)),
+    ...rows.flatMap((r) =>
+      r.subtasks.map((s) => [
+        num(r.t.week_number), str(r.track), str(r.t.title), str(s.title),
+        str(s.is_completed ? 'Done' : 'Pending', { ...S.center, fill: { fgColor: { rgb: s.is_completed ? DONE_FILL : PENDING_FILL } } }),
+        s.completed_at ? date(s.completed_at.slice(0, 10)) : str('—', S.center),
+      ]),
+    ),
+  ];
+  if (subRows.length === 2) subRows.push([str('No subtasks.', S.cell)]);
+  X.utils.book_append_sheet(
+    wb,
+    sheet(X, subRows, { widths: [7, 16, 32, 40, 10, 13], filter: [1, 0, subRows.length - 1, subHeader.length - 1], headerRow: 1 }),
+    'Subtasks',
+  );
+
+  // All weeks: also one sheet per week
+  if (d.week === 'all' && weeks.length > 1) {
+    for (const w of weeks) {
+      X.utils.book_append_sheet(wb, tasksSheet(X, d, rows.filter((r) => r.t.week_number === w), `Tasks — Week ${w}`), `Week ${w}`);
+    }
+  }
+  return wb;
+}
+
+/** Tasks_Week_3_2026-10-22.xlsx / Tasks_All_Weeks_2026-10-22.xlsx */
+export const tasksFileName = (week: number | 'all', todayIso: string) =>
+  `Tasks_${week === 'all' ? 'All_Weeks' : `Week_${week}`}_${todayIso}.xlsx`;
 
 export async function downloadWorkbook(wb: WorkBook, fileName: string) {
   const X = await loadXLSX();
